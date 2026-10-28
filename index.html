@@ -1,0 +1,2204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Fold a packaging dieline SVG into 3D, add artwork, emboss, foil, Spot UV and windows, and export a GLB, PNG renders or an animated PNG sequence.">
+<title>Foldline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: a tool rail on the left with pop-out panels, the cutting-mat stage fills the rest, export bar along the bottom. On phones the rail becomes a row of icons. */
+/* Icons: Phosphor Icons (fill weight), MIT licence, phosphoricons.com. The emboss icon and the bottom cursor are drawn for this app. */
+:root {
+  --bg: #eef2f0; --panel: #ffffff; --ink: #16201c; --muted: #56645f; --line: #d3dcd8;
+  --accent: #1f6f5c; --accent-ink: #ffffff;
+  --cut: #c4007a; --crease: #0084c2; --fwd: #b86e00;
+  --face: #e7eeeb; --face-base: #c9e2d9; --face-sel: #bfe2f4;
+  --film: rgba(110, 185, 230, .45);
+  --sheet: #e2e4e3; --sheet-face: #ecedec; --cutline: #6a6e6c; --badge-ink: #ffffff;
+  --tool: #1e2724; --tool-hover: #2a3632; --tool-ink: #eef4f1; --tool-gap: #3a4843;
+  --mat: #2c5a4d; --mat-ink: #e2f0ea; --mat-veil: rgba(10, 28, 22, .62);
+  --shadow: 0 14px 36px rgba(10, 20, 16, .28);
+  --f-ui: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1513; --panel: #161f1b; --ink: #e2eae6; --muted: #93a39d; --line: #29352f;
+  --accent: #5cc4a6; --accent-ink: #0b1512;
+  --cut: #ff5fb4; --crease: #46b8ef; --fwd: #f0a43a;
+  --face: #1f2a26; --face-base: #24443a; --face-sel: #1b4560;
+  --sheet: #1a2320; --sheet-face: #202b27; --cutline: #9aa6a1; --badge-ink: #0b1512;
+  --tool: #1b2421; --tool-hover: #26322e; --tool-ink: #eef4f1; --tool-gap: #33413c;
+  --shadow: 0 14px 36px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f1513; --panel: #161f1b; --ink: #e2eae6; --muted: #93a39d; --line: #29352f;
+  --accent: #5cc4a6; --accent-ink: #0b1512;
+  --cut: #ff5fb4; --crease: #46b8ef; --fwd: #f0a43a;
+  --face: #1f2a26; --face-base: #24443a; --face-sel: #1b4560;
+  --sheet: #1a2320; --sheet-face: #202b27; --cutline: #9aa6a1; --badge-ink: #0b1512;
+  --tool: #1b2421; --tool-hover: #26322e; --tool-ink: #eef4f1; --tool-gap: #33413c;
+  --shadow: 0 14px 36px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 14px; line-height: 1.45; }
+svg.i { width: 22px; height: 22px; flex: none; fill: currentColor; }
+
+.app { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; height: 100%; }
+.rail {
+  grid-row: 1; grid-column: 1; z-index: 20; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+  padding-block: 14px; padding-right: 12px; padding-left: max(12px, env(safe-area-inset-left, 0px));
+  background: var(--bg); border-right: 1px solid var(--line);
+}
+.brand { margin: 0 4px; font-size: 21px; font-weight: 700; font-stretch: 80%; letter-spacing: -.01em; }
+.brand span { color: var(--cut); }
+.tools { display: flex; flex-direction: column; gap: 2px; background: var(--tool-gap); border-radius: 8px; overflow: hidden; }
+.tool {
+  display: flex; align-items: center; gap: 12px; min-width: 186px; padding: 11px 16px 11px 12px;
+  border: 0; background: var(--tool); color: var(--tool-ink); font: 500 14px var(--f-ui); text-align: left; cursor: pointer;
+}
+.tool svg.i { width: 26px; height: 26px; }
+.tool:hover { background: var(--tool-hover); }
+.tool[aria-expanded="true"], .tool[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tool .mode { margin-left: auto; font: 500 10px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; opacity: .6; }
+.rail .panel { position: static; width: auto; max-width: 186px; max-height: none; box-shadow: none; padding: 12px; }
+.rail .panel h2 { font-size: 14px; }
+.rail-exports { margin-top: auto; display: flex; flex-direction: column; gap: 2px; background: var(--tool-gap); border-radius: 8px; overflow: hidden; }
+.rail-exports .xbtn { border-radius: 0; gap: 12px; padding: 11px 16px 11px 12px; text-align: left; }
+.rail-exports .xbtn svg.i { width: 26px; height: 26px; }
+.rail-note { margin: 0 4px; font-size: 12px; color: var(--muted); max-width: 186px; }
+
+.bar {
+  grid-row: 2; grid-column: 1 / 3; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap;
+  padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--bg); border-top: 1px solid var(--line);
+}
+.info { display: flex; flex-direction: column; min-width: 0; }
+.file { font: 500 13px var(--f-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#stats { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.exports { display: flex; gap: 8px; flex-wrap: wrap; }
+.xbtn {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border: 0; border-radius: 6px;
+  background: var(--tool); color: var(--tool-ink); font: 500 14px var(--f-ui); cursor: pointer;
+}
+.xbtn:hover { background: var(--tool-hover); }
+.xbtn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.panel {
+  position: absolute; z-index: 30; width: min(330px, calc(100vw - 24px)); max-height: calc(100% - 24px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+}
+.panel > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.panel h3 { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.close { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.close:hover { background: var(--face); color: var(--ink); }
+.close svg.i { width: 16px; height: 16px; }
+details summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+details[open] { display: flex; flex-direction: column; gap: 10px; }
+
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row > input[type=range] { flex: 1; min-width: 110px; }
+.hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+.hint b { color: var(--ink); font-weight: 600; }
+.btn {
+  font: 500 13px var(--f-ui); padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  display: inline-flex; align-items: center; gap: 6px; position: relative;
+}
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:hover { filter: brightness(1.06); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.wide { justify-content: center; width: 100%; }
+.btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.btn:focus-within, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--crease); outline-offset: 2px; }
+input[type=range] { accent-color: var(--accent); }
+output, .mono { font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.num { width: 64px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); }
+select { font: 13px var(--f-ui); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); max-width: 100%; }
+input[type=color] { width: 40px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+label.lbl { font-size: 12.5px; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 12px var(--f-ui); padding: 7px 4px; border: 0; background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.swatches { display: flex; gap: 8px; }
+.swatches button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; }
+.swatches button.on, .swatch-pick.on { border-color: var(--ink); }
+.swatch-pick { width: 30px; height: 30px; padding: 0; border: 2px solid var(--line); border-radius: 50%; overflow: hidden; cursor: pointer; background: conic-gradient(#e44, #ec4, #4c6, #4ae, #a4e, #e44); }
+.swatch-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch-pick::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.swatch-pick::-moz-color-swatch { border: 0; border-radius: 50%; }
+.fin { display: flex; flex-direction: column; gap: 12px; }
+.seg .dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.sub { display: flex; flex-direction: column; gap: 8px; padding-left: 10px; border-left: 2px solid var(--line); }
+ul.wins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ul.wins .mono { color: var(--muted); }
+.progress { height: 6px; border-radius: 3px; background: var(--face); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+.stage { grid-row: 1; grid-column: 2; position: relative; min-width: 0; min-height: 0; background: var(--mat); overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; }
+.stage.v-2d, .stage.v-3d { grid-template-columns: 1fr; }
+.stage.v-2d .pane3d, .stage.v-3d .pane2d { display: none; }
+.pane2d, .pane3d { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.pane2d { background: var(--sheet); }
+.pane3d { background: var(--mat); }
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#map .face { fill: var(--sheet-face); stroke: var(--cutline); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; cursor: pointer; }
+#map .face.base { fill: var(--face-base); }
+#map .face.sel { fill: var(--face-sel); }
+#map .h { stroke-width: 4; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+#map .h.back { stroke: var(--crease); }
+#map .h.fwd { stroke: var(--fwd); }
+#map .h.flat { stroke: var(--muted); }
+#map .h.sel { stroke-width: 7; }
+#map .hit { stroke: transparent; stroke-width: 16px; vector-effect: non-scaling-stroke; cursor: pointer; fill: none; }
+#map .badge { cursor: pointer; outline: none; }
+#map .badge rect { fill: var(--crease); }
+#map .badge.fwd rect { fill: var(--fwd); }
+#map .badge.flat rect { fill: var(--muted); }
+#map .badge.sel rect, #map .badge:focus-visible rect { stroke: var(--ink); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+#map .badge:hover rect { filter: brightness(1.12); }
+#map .tag { fill: var(--ink); font-family: var(--f-ui); font-weight: 600; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#map .badge text { fill: var(--badge-ink); font-family: var(--f-mono); font-weight: 500; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#map .hole { fill: transparent; stroke: none; pointer-events: none; }
+#map .hole.filled { fill: var(--film); }
+#map.bucket .hole { pointer-events: all; stroke: var(--crease); stroke-width: 1.5; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.stage.tool-bottom #gl, .stage.tool-bottom #map .face { cursor: var(--cur-bottom), pointer; }
+.stage.tool-bucket #gl, .stage.tool-bucket #map .hole { cursor: var(--cur-bucket), crosshair; }
+.ang-edit { position: absolute; z-index: 5; font: 500 14px var(--f-mono); text-align: center; border: 2px solid var(--ink); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 2px 4px; }
+.legend2d { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; pointer-events: none; max-width: calc(100% - 24px); }
+.legend2d i { display: inline-block; width: 16px; border-top: 4px solid; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.views { position: absolute; z-index: 6; top: 10px; right: calc(10px + env(safe-area-inset-right, 0px)); display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.views button { font: 500 12.5px var(--f-ui); padding: 7px 11px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.views button + button { border-left: 1px solid var(--line); }
+.views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.all90 { position: absolute; z-index: 6; top: 52px; right: calc(10px + env(safe-area-inset-right, 0px)); display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; font-size: 12.5px; cursor: pointer; }
+.stage.v-3d .all90 { display: none; }
+
+.scrub {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 5; width: min(520px, calc(100% - 24px));
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 8px; background: var(--mat-veil); color: var(--mat-ink);
+}
+.scrub input[type=range] { flex: 1; min-width: 80px; accent-color: #8fd6bf; }
+.scrub output { width: 40px; text-align: right; color: var(--mat-ink); }
+.play { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 6px; background: #8fd6bf; color: #0b1512; cursor: pointer; }
+.play svg.i { width: 16px; height: 16px; }
+.play.fit { background: transparent; color: var(--mat-ink); border: 1px solid rgba(226, 240, 234, .35); }
+.hud { position: absolute; left: 12px; bottom: 62px; z-index: 4; max-width: calc(100% - 24px); color: var(--mat-ink); background: var(--mat-veil); font: 12px var(--f-mono); padding: 6px 10px; border-radius: 4px; pointer-events: none; }
+.msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--mat-ink); font-size: 15px; pointer-events: none; }
+.msg div { background: var(--mat-veil); padding: 14px 18px; border-radius: 8px; max-width: 420px; }
+.drop { position: absolute; inset: 10px; z-index: 9; border: 2px dashed var(--mat-ink); border-radius: 10px; display: grid; place-items: center; color: var(--mat-ink); font-size: 16px; background: var(--mat-veil); pointer-events: none; }
+
+.toasts { position: absolute; z-index: 40; left: 50%; top: 58px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(520px, calc(100% - 24px)); pointer-events: none; }
+.toast { padding: 9px 14px; border-radius: 8px; background: var(--tool); color: var(--tool-ink); font-size: 13px; box-shadow: var(--shadow); border-left: 4px solid var(--accent); transition: opacity .3s; }
+.toast.err { border-left-color: var(--cut); }
+
+@media (max-width: 800px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 56svh auto auto; height: auto; min-height: 100%; }
+  .stage { grid-row: 1; grid-column: 1; grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .stage.v-2d, .stage.v-3d { grid-template-rows: 1fr; }
+  .rail { grid-row: 2; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px)); }
+  .brand, .rail-note { display: none; }
+  .tools { flex-direction: row; }
+  .tool { flex-direction: column; gap: 4px; min-width: 76px; padding: 8px 6px; font-size: 11px; text-align: center; }
+  .tool .mode { display: none; }
+  .rail-exports { margin-top: 0; flex-direction: row; flex: none; }
+  .rail-exports .xbtn { flex-direction: column; gap: 4px; min-width: 76px; padding: 8px 6px; font-size: 11px; text-align: center; }
+  .bar { grid-row: 3; grid-column: 1; }
+  .toasts { top: auto; }
+  .panel, .rail .panel { position: fixed; max-width: none; box-shadow: var(--shadow); left: 8px !important; right: 8px; top: auto !important; bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; width: auto; max-height: 62svh; }
+  .toasts { position: fixed; bottom: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<style>body { margin: 0; }</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail" aria-label="Tools">
+    <p class="brand">Fold<span>line</span></p>
+    <div class="tools">
+      <button class="tool" data-panel="pFile" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34Zm-56,67.32a8,8,0,0,1-11.32,0L136,139.31V184a8,8,0,0,1-16,0V139.31l-10.34,10.35a8,8,0,0,1-11.32-11.32l24-24a8,8,0,0,1,11.32,0l24,24A8,8,0,0,1,157.66,149.66ZM152,88V44l44,44Z"/></svg>File (SVG)</button>
+      <button class="tool" id="toolBottom" data-panel="pBottom" data-tool="bottom" aria-pressed="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M208,232a8,8,0,0,1-8,8H56a8,8,0,0,1,0-16H200A8,8,0,0,1,208,232ZM96,208h64a16,16,0,0,0,16-16V40a16,16,0,0,0-16-16H96A16,16,0,0,0,80,40V192A16,16,0,0,0,96,208Z"/></svg>Set bottom<span class="mode">Tool</span></button>
+      <button class="tool" data-panel="pSubstrate" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M220,169.09l-92,53.65L36,169.09A8,8,0,0,0,28,182.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,169.09Z"/><path d="M220,121.09l-92,53.65L36,121.09A8,8,0,0,0,28,134.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,121.09Z"/><path d="M28,86.91l96,56a8,8,0,0,0,8.06,0l96-56a8,8,0,0,0,0-13.82l-96-56a8,8,0,0,0-8.06,0l-96,56a8,8,0,0,0,0,13.82Z"/></svg>Substrate</button>
+      <button class="tool" data-panel="pEmboss" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M28 176a100 100 0 0 1 200 0z"/><rect x="16" y="192" width="224" height="20" rx="10"/></svg>Add emboss</button>
+      <button class="tool" data-panel="pFoil" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"/></svg>Foil / Spot UV</button>
+      <button class="tool" data-panel="pLight" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm8,24a64,64,0,1,0,64,64A64.07,64.07,0,0,0,128,64ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg>Lighting</button>
+      <button class="tool" id="btnBucket" data-panel="pWindow" data-tool="bucket" aria-pressed="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M256,208a24,24,0,0,1-48,0c0-17.91,15.57-41.77,17.34-44.44a8,8,0,0,1,13.32,0C240.43,166.23,256,190.09,256,208ZM132.49,124.49a12,12,0,0,0-17-17l0,0s0,0,0,0a12,12,0,0,0,17,16.94ZM37.65,18.34A8,8,0,0,0,26.34,29.66l32.6,32.6L70.25,51ZM234.53,139.07a8,8,0,0,0,3.13-13.24L122.17,10.34a8,8,0,0,0-11.31,0L70.25,51l40.43,40.42a28,28,0,1,1-11.31,11.32L58.94,62.26,15,106.17a24,24,0,0,0,0,33.94L99.89,225a24,24,0,0,0,33.94,0l78.49-78.49Z"/></svg>Plastic window<span class="mode">Tool</span></button>
+    </div>
+    <section class="panel" id="pBottom" hidden aria-label="Set bottom">
+    <header><h2>Set bottom</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <p class="hint">Click a panel on the dieline or the 3D model. It becomes the bottom of the pack: it sits on the mat, the box folds up from it, and the 3D model exports the same way up.</p>
+    <button class="btn ghost" id="btnUpright" hidden>Stand it upright again</button>
+  </section>
+    <section class="panel" id="pWindow" hidden aria-label="Plastic window">
+    <header><h2>Plastic window</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <p class="hint">Click a window on the dieline or the 3D model to fill it with clear film. Click again to empty it.</p>
+    <ul class="wins" id="winList"></ul>
+  </section>
+    <p class="rail-note">Drop a dieline SVG or artwork anywhere on the view to open it.</p>
+    <div class="rail-exports" role="group" aria-label="Downloads">
+      <button class="xbtn" id="btnGlb"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M223.68,66.15,135.68,18a15.88,15.88,0,0,0-15.36,0l-88,48.17a16,16,0,0,0-8.32,14v95.64a16,16,0,0,0,8.32,14l88,48.17a15.88,15.88,0,0,0,15.36,0l88-48.17a16,16,0,0,0,8.32-14V80.18A16,16,0,0,0,223.68,66.15ZM128,120,47.65,76,128,32l80.35,44Zm8,99.64V133.83l80-43.78v85.76Z"/></svg>Download 3D model</button>
+      <button class="xbtn" data-panel="pImage" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM156,88a12,12,0,1,1-12,12A12,12,0,0,1,156,88Zm60,112H40V160.69l46.34-46.35a8,8,0,0,1,11.32,0h0L165,181.66a8,8,0,0,0,11.32-11.32l-17.66-17.65L173,138.34a8,8,0,0,1,11.31,0L216,170.07V200Z"/></svg>Image (PNG)</button>
+      <button class="xbtn" data-panel="pSeq" aria-expanded="false"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM184,56h32V72H184ZM72,200H40V184H72ZM72,72H40V56H72Zm48,128H88V184h32Zm0-128H88V56h32Zm48,128H136V184h32Zm0-128H136V56h32Zm48,128H184V184h32v16Z"/></svg>Animated sequence</button>
+    </div>
+  </nav>
+
+  <main class="stage v-split" id="stage">
+    <div class="views" id="views" role="group" aria-label="View">
+      <button data-v="split" aria-pressed="true">Side by side</button><button data-v="2d" aria-pressed="false">Dieline</button><button data-v="3d" aria-pressed="false">3D</button>
+    </div>
+    <label class="all90" id="all90Wrap"><input type="checkbox" id="all90"> Set all folds to 90°</label>
+    <div class="pane2d" id="pane2d">
+      <svg id="map" role="group" aria-label="Flat dieline. Each fold shows its angle."></svg>
+      <input type="number" id="angEdit" class="ang-edit" min="-180" max="180" step="0.5" aria-label="Fold angle in degrees" hidden>
+      <div class="legend2d"><span><i style="color:var(--crease)"></i>Folds back</span><span><i style="color:var(--fwd)"></i>Folds forward</span><span><i style="color:var(--muted)"></i>Flat</span></div>
+    </div>
+    <div class="pane3d" id="pane3d">
+      <canvas id="gl"></canvas>
+      <div class="hud" id="hud">Drag to orbit · scroll to zoom · click a panel</div>
+      <div class="scrub">
+        <button class="play" id="btnPlay" aria-label="Unfold"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path id="playIcon" d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></svg></button>
+        <input type="range" id="fold" min="0" max="100" value="100" aria-label="How far the pack is folded">
+        <output id="foldOut" for="fold">100%</output>
+        <button class="play fit" id="btnFit" aria-label="Fit everything in view" title="Fit everything in view"><svg class="i" viewBox="0 0 256 256" aria-hidden="true"><path d="M93.66,202.34A8,8,0,0,1,88,216H48a8,8,0,0,1-8-8V168a8,8,0,0,1,13.66-5.66ZM88,40H48a8,8,0,0,0-8,8V88a8,8,0,0,0,13.66,5.66l40-40A8,8,0,0,0,88,40ZM211.06,160.61a8,8,0,0,0-8.72,1.73l-40,40A8,8,0,0,0,168,216h40a8,8,0,0,0,8-8V168A8,8,0,0,0,211.06,160.61ZM208,40H168a8,8,0,0,0-5.66,13.66l40,40A8,8,0,0,0,216,88V48A8,8,0,0,0,208,40Z"/></svg></button>
+      </div>
+    </div>
+    <div class="msg" id="stageMsg" hidden><div id="stageMsgText"></div></div>
+    <div class="drop" id="drop" hidden>Drop a dieline SVG or artwork</div>
+  </main>
+
+  <footer class="bar">
+    <div class="info"><span class="file" id="fileName">Sample tuck box</span><span id="stats"></span></div>
+  </footer>
+
+  <!-- Panels -->
+  <section class="panel" id="pFile" hidden aria-label="File">
+    <header><h2>File</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <label class="btn wide">Open dieline SVG<input type="file" id="inDieline" accept=".svg,image/svg+xml"></label>
+    <p class="hint">Needs a layer named <b>Cuts</b> and one named <b>Folds</b> or <b>Creases</b>. Every other layer is used as artwork. Layers named <b>Emboss</b>, <b>Deboss</b>, <b>Foil</b> or <b>Spot UV</b> become finishes.</p>
+    <h3>Artwork</h3>
+    <div class="row">
+      <label class="btn ghost">Add artwork<input type="file" id="inArt" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
+      <button class="btn ghost" id="btnClearArt" hidden>Remove</button>
+    </div>
+    <h3>Inside artwork</h3>
+    <div class="row">
+      <label class="btn ghost">Add inside artwork<input type="file" id="inInside" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
+      <button class="btn ghost" id="btnClearInside" hidden>Remove</button>
+    </div>
+    <label class="check" id="insideMirrorWrap" hidden><input type="checkbox" id="insideMirror" checked> Laid out as seen from inside (mirrored)</label>
+    <p class="hint">PNG, JPG, SVG or PDF exported from the same artboard as the dieline.</p>
+    <details>
+      <summary>More options</summary>
+      <label class="check"><input type="checkbox" id="showCreases"> Show fold lines on the model</label>
+      <div class="row">
+        <label class="lbl" for="units">1 SVG unit equals</label>
+        <select id="units">
+          <option value="auto">Auto</option><option value="pt">1 pt (Illustrator)</option><option value="px">1 px at 96 per inch</option><option value="mm">1 mm</option>
+        </select>
+      </div>
+    </details>
+  </section>
+
+
+  <section class="panel" id="pLight" hidden aria-label="Lighting">
+    <header><h2>Lighting</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <div class="seg" id="lightPreset"><button data-l="soft" class="on">Soft</button><button data-l="studio">Studio</button><button data-l="dramatic">Dramatic</button><button data-l="even">Even</button></div>
+    <div class="row"><label class="lbl" for="lightBright">Brightness</label><input type="range" id="lightBright" min="0.3" max="1.6" step="0.05" value="1"><output id="lightBrightOut" for="lightBright">100%</output></div>
+    <div class="row"><label class="lbl" for="lightAngle">Light from</label><input type="range" id="lightAngle" min="0" max="360" step="5" value="125"><output id="lightAngleOut" for="lightAngle">125°</output></div>
+    <p class="hint">Lighting changes the 3D view, images and sequences. The 3D model download carries no lighting, because Stager and other 3D tools light the scene themselves. <b>Even</b> is the flattest light for checking artwork colours.</p>
+  </section>
+
+  <section class="panel" id="pSubstrate" hidden aria-label="Substrate">
+    <header><h2>Substrate</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <select id="substrate" aria-label="Substrate">
+      <option value="paper">Paper, 120 gsm · 0.15 mm</option>
+      <option value="sbs" selected>Folding carton, SBS 350 gsm · 0.45 mm</option>
+      <option value="gd2">Folding carton, grey back · 0.5 mm</option>
+      <option value="kraft">Kraft board · 0.6 mm</option>
+      <option value="rigid">Rigid box board · 1.5 mm</option>
+      <option value="eflute">Corrugated, E-flute · 1.6 mm</option>
+      <option value="bflute">Corrugated, B-flute · 3 mm</option>
+      <option value="cflute">Corrugated, C-flute · 4 mm</option>
+      <option value="custom">Custom thickness</option>
+    </select>
+    <div class="row">
+      <label class="lbl" for="thick">Thickness</label>
+      <input type="number" id="thick" class="num mono" min="0.05" max="10" step="0.05" value="0.45"><span class="mono">mm</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Inside colour</span>
+      <div class="swatches" id="boards">
+        <button data-c="#f2f2f2" class="on" style="background:#f2f2f2" aria-label="Off-white"></button>
+        <button data-c="#a9aba6" style="background:#a9aba6" aria-label="Grey"></button>
+        <button data-c="#b8905f" style="background:#b8905f" aria-label="Kraft"></button>
+        <input type="color" id="boardCustom" class="swatch-pick" value="#d8e2ee" aria-label="Pick any inside colour" title="Pick any colour">
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="pEmboss" hidden aria-label="Emboss">
+    <header><h2>Emboss</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <div class="row">
+      <label class="btn">Add emboss map<input type="file" id="inEmboss" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
+      <button class="btn ghost" id="btnClearEmboss" hidden>Remove</button>
+    </div>
+    <div class="sub" id="embossCtl" hidden>
+      <div class="row"><label class="lbl" for="embStr">Depth</label><input type="range" id="embStr" min="0" max="3" step="0.05" value="1"></div>
+      <label class="check"><input type="checkbox" id="embInv"> Deboss (press in instead of raise)</label>
+    </div>
+    <p class="hint">A black-and-white image from the same artboard: black is raised. A ready-made normal map also works. Layers named <b>Emboss</b> or <b>Deboss</b> in the dieline SVG are applied automatically.</p>
+  </section>
+
+  <section class="panel" id="pFoil" hidden aria-label="Foil and Spot UV">
+    <header><h2>Foil / Spot UV</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <div class="seg" id="finTabs" role="tablist">
+      <button data-t="foil" class="on" role="tab" aria-selected="true">Foil<span class="dot" id="dotFoil" hidden></span></button><button data-t="uv" role="tab" aria-selected="false">Spot UV<span class="dot" id="dotUv" hidden></span></button>
+    </div>
+    <div class="fin" id="finFoil">
+      <div class="row">
+        <label class="btn">Add foil mask<input type="file" id="inFoil" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
+        <button class="btn ghost" id="btnClearFoil" hidden>Remove</button>
+      </div>
+      <div class="sub" id="foilCtl" hidden>
+        <div class="row">
+          <label class="lbl" for="foilCol">Foil</label>
+          <select id="foilCol">
+            <option value="silver">Silver</option><option value="gold">Gold</option><option value="copper">Copper</option><option value="rose">Rose gold</option>
+            <option value="holo">Holographic</option><option value="glitter">Glitter</option>
+            <option value="pattern">Pattern from an image</option>
+            <option value="art">Metallic, tinted by the artwork</option>
+          </select>
+        </div>
+        <div class="sub" id="foilPatternRow" hidden>
+          <div class="row">
+            <label class="btn ghost">Upload pattern<input type="file" id="inFoilPat" accept=".png,.jpg,.jpeg,.webp,.svg,image/*"></label>
+            <span id="foilPatName" class="mono"></span>
+          </div>
+          <div class="row"><label class="lbl" for="foilTile">Repeats every</label><input type="number" id="foilTile" class="num mono" min="1" max="500" step="1" value="25"><span class="mono">mm</span></div>
+          <p class="hint">Tiles over silver. Transparent parts show silver, and brighter parts shine more.</p>
+        </div>
+        <div class="row"><label class="lbl" for="foilShine">Shine</label><input type="range" id="foilShine" min="0" max="1" step="0.01" value="0.8"></div>
+        <label class="check"><input type="checkbox" id="foilInv"> Swap foil and plain areas</label>
+      </div>
+      <p class="hint">A black-and-white mask from the same artboard: black is foiled. A layer named <b>Foil</b> in the dieline SVG is applied automatically, and a colour in its name, such as "Gold foil", sets the foil.</p>
+    </div>
+    <div class="fin" id="finUv" hidden>
+      <div class="row">
+        <label class="btn">Add Spot UV mask<input type="file" id="inUv" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
+        <button class="btn ghost" id="btnClearUv" hidden>Remove</button>
+      </div>
+      <div class="sub" id="uvCtl" hidden>
+        <div class="row"><label class="lbl" for="uvShine">Gloss</label><input type="range" id="uvShine" min="0" max="1" step="0.01" value="0.85"></div>
+        <label class="check"><input type="checkbox" id="uvInv"> Swap varnished and plain areas</label>
+      </div>
+      <p class="hint">Clear gloss varnish over the print. A black-and-white mask from the same artboard: black is varnished. A layer named <b>Spot UV</b> or <b>Varnish</b> in the dieline SVG is applied automatically. Where foil and Spot UV overlap, foil wins.</p>
+    </div>
+  </section>
+
+
+  <section class="panel" id="pImage" hidden aria-label="Image export">
+    <header><h2>Image (PNG)</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <p class="hint">Saves the 3D view as you see it now.</p>
+    <div class="seg" id="imgStyle"><button data-s="real" class="on">Realistic</button><button data-s="cel">Cel shaded</button></div>
+    <div class="sub" id="imgCel" hidden>
+      <div class="row"><label class="lbl" for="imgLine">Line weight</label><input type="range" id="imgLine" min="1" max="10" step="0.5" value="3"></div>
+      <label class="check"><input type="checkbox" id="imgPlain"> Plain white board (no artwork)</label>
+    </div>
+    <div class="row">
+      <label class="lbl" for="imgBgMode">Background</label>
+      <select id="imgBgMode"><option value="clear">Transparent</option><option value="colour">Colour</option></select>
+      <input type="color" id="imgBg" value="#ffffff" aria-label="Background colour" hidden>
+    </div>
+    <label class="check" id="imgCropWrap"><input type="checkbox" id="imgCrop" checked> Crop to the pack, with a 15 px margin</label>
+    <div class="row">
+      <label class="lbl" for="imgSize">Size</label>
+      <select id="imgSize"><option value="1920x1080">1920 × 1080</option><option value="3840x2160" selected>3840 × 2160</option><option value="2048x2048">2048 × 2048</option><option value="view">Same shape as the view</option></select>
+    </div>
+    <button class="btn wide" id="btnPng">Download PNG</button>
+  </section>
+
+  <section class="panel" id="pSeq" hidden aria-label="Animated sequence export">
+    <header><h2>Animated sequence</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
+    <p class="hint">A numbered PNG sequence in a zip, ready for After Effects, Premiere or Keynote. The camera stays still and frames the whole fold. To make a video on a Mac, unzip it, open <b>QuickTime Player</b>, choose <b>File › Open Image Sequence…</b>, pick the folder, then save the movie.</p>
+    <div class="row">
+      <label class="lbl" for="seqMotion">Motion</label>
+      <select id="seqMotion"><option value="fold">Fold up</option><option value="unfold">Unfold</option><option value="loop">Fold up, then unfold</option></select>
+    </div>
+    <div class="row">
+      <label class="lbl" for="seqLen">Length</label><input type="number" id="seqLen" class="num mono" min="1" max="20" step="0.5" value="4"><span class="mono">sec</span>
+      <label class="lbl" for="seqFps">at</label><select id="seqFps"><option>24</option><option selected>30</option><option>60</option></select><span class="mono">fps</span>
+    </div>
+    <div class="seg" id="seqStyle"><button data-s="real" class="on">Realistic</button><button data-s="cel">Cel shaded</button></div>
+    <div class="sub" id="seqCel" hidden>
+      <div class="row"><label class="lbl" for="seqLine">Line weight</label><input type="range" id="seqLine" min="1" max="10" step="0.5" value="3"></div>
+      <label class="check"><input type="checkbox" id="seqPlain"> Plain white board (no artwork)</label>
+    </div>
+    <div class="row">
+      <label class="lbl" for="seqBgMode">Background</label>
+      <select id="seqBgMode"><option value="clear">Transparent</option><option value="colour">Colour</option></select>
+      <input type="color" id="seqBg" value="#ffffff" aria-label="Background colour" hidden>
+    </div>
+    <label class="check" id="seqCropWrap"><input type="checkbox" id="seqCrop" checked> Crop to the pack, with a 15 px margin</label>
+    <div class="row">
+      <label class="lbl" for="seqSize">Size</label>
+      <select id="seqSize"><option value="1280x720">1280 × 720</option><option value="1920x1080" selected>1920 × 1080</option><option value="1080x1080">1080 × 1080</option><option value="1080x1920">1080 × 1920</option></select>
+    </div>
+    <div class="progress" id="seqProg" hidden><i></i></div>
+    <button class="btn wide" id="btnSeq">Download PNG sequence</button>
+  </section>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { zipSync } from 'three/addons/libs/fflate.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+
+const $ = s => document.querySelector(s);
+const MM = { mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, pc: 25.4 / 6, px: 25.4 / 96 };
+const FLAP_GAP_MM = 0.05; // clearance between flaps stacked inside each other
+const SUBSTRATES = {
+  paper: { t: 0.15, inside: '#f2f2f2', edge: '#ececec' },
+  sbs: { t: 0.45, inside: '#f2f2f2', edge: '#e8e8e8' },
+  gd2: { t: 0.5, inside: '#a9aba6', edge: '#bdbbb2' },
+  kraft: { t: 0.6, inside: '#b8905f', edge: '#a8824f' },
+  rigid: { t: 1.5, inside: '#a9aba6', edge: '#8f918b' },
+  eflute: { t: 1.6, inside: '#b8905f', flute: 3.3 },
+  bflute: { t: 3, inside: '#b8905f', flute: 6.1 },
+  cflute: { t: 4, inside: '#b8905f', flute: 7.3 },
+  custom: { t: null, inside: null, edge: '#e6e2d8' },
+};
+const BOARD_BLANK = '#f2f2f2'; // unprinted board: neutral off-white, about 5% grey
+const FOILS = { silver: '#e4e6e8', gold: '#e2b354', copper: '#cf8a5b', rose: '#e6b3a0' };
+
+const state = {
+  doc: null,      // parsed dieline
+  model: null,    // faces + hinges
+  angles: new Map(),
+  base: -1, t: 1, sel: -1,
+  art: null, showCreases: false, board: '#f2f2f2',
+  unitMode: 'auto', unit: 1, name: 'model',
+  foilPattern: null, foilTile: 25,
+  light: { preset: 'soft', bright: 1, angle: 125 },
+  substrate: 'sbs', thick: 0.45, insideArt: null, insideMirror: true, emboss: null, foil: null, films: new Set(), bucket: false,
+};
+
+/* ---------------- SVG reading ---------------- */
+
+function tokenize(d) {
+  const t = []; let i = 0; const n = d.length;
+  while (i < n) {
+    const c = d[i];
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) { if (c !== 'e' && c !== 'E') t.push(c); i++; continue; }
+    if (c === '-' || c === '+' || c === '.' || (c >= '0' && c <= '9')) {
+      let j = i; if (d[j] === '-' || d[j] === '+') j++;
+      let dot = false;
+      while (j < n) { const ch = d[j]; if (ch >= '0' && ch <= '9') j++; else if (ch === '.' && !dot) { dot = true; j++; } else break; }
+      if (d[j] === 'e' || d[j] === 'E') { let k = j + 1; if (d[k] === '-' || d[k] === '+') k++; if (d[k] >= '0' && d[k] <= '9') { j = k; while (d[j] >= '0' && d[j] <= '9') j++; } }
+      t.push(parseFloat(d.slice(i, j))); i = j; continue;
+    }
+    i++;
+  }
+  return t;
+}
+
+function cubicPts(out, x0, y0, x1, y1, x2, y2, x3, y3, tol) {
+  const L = Math.hypot(x1 - x0, y1 - y0) + Math.hypot(x2 - x1, y2 - y1) + Math.hypot(x3 - x2, y3 - y2);
+  const n = Math.max(1, Math.min(64, Math.ceil(L / tol)));
+  for (let i = 1; i <= n; i++) {
+    const t = i / n, m = 1 - t;
+    out.push([m*m*m*x0 + 3*m*m*t*x1 + 3*m*t*t*x2 + t*t*t*x3, m*m*m*y0 + 3*m*m*t*y1 + 3*m*t*t*y2 + t*t*t*y3]);
+  }
+}
+function quadPts(out, x0, y0, x1, y1, x2, y2, tol) {
+  const L = Math.hypot(x1 - x0, y1 - y0) + Math.hypot(x2 - x1, y2 - y1);
+  const n = Math.max(1, Math.min(48, Math.ceil(L / tol)));
+  for (let i = 1; i <= n; i++) { const t = i / n, m = 1 - t; out.push([m*m*x0 + 2*m*t*x1 + t*t*x2, m*m*y0 + 2*m*t*y1 + t*t*y2]); }
+}
+function arcPts(out, x1, y1, rx, ry, phi, fa, fs, x2, y2, tol) {
+  if (!rx || !ry) { out.push([x2, y2]); return; }
+  rx = Math.abs(rx); ry = Math.abs(ry);
+  const p = phi * Math.PI / 180, c = Math.cos(p), s = Math.sin(p);
+  const dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+  const xp = c * dx + s * dy, yp = -s * dx + c * dy;
+  const lam = xp * xp / (rx * rx) + yp * yp / (ry * ry);
+  if (lam > 1) { const r = Math.sqrt(lam); rx *= r; ry *= r; }
+  const num = rx*rx*ry*ry - rx*rx*yp*yp - ry*ry*xp*xp, den = rx*rx*yp*yp + ry*ry*xp*xp;
+  let co = den ? Math.sqrt(Math.max(0, num / den)) : 0; if (fa === fs) co = -co;
+  const cxp = co * rx * yp / ry, cyp = -co * ry * xp / rx;
+  const cx = c * cxp - s * cyp + (x1 + x2) / 2, cy = s * cxp + c * cyp + (y1 + y2) / 2;
+  const ang = (ux, uy, vx, vy) => Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+  const t1 = ang(1, 0, (xp - cxp) / rx, (yp - cyp) / ry);
+  let dt = ang((xp - cxp) / rx, (yp - cyp) / ry, (-xp - cxp) / rx, (-yp - cyp) / ry);
+  if (!fs && dt > 0) dt -= 2 * Math.PI; else if (fs && dt < 0) dt += 2 * Math.PI;
+  const n = Math.max(2, Math.min(96, Math.ceil(Math.abs(dt) * Math.max(rx, ry) / tol)));
+  for (let k = 1; k <= n; k++) {
+    const t = t1 + dt * k / n;
+    out.push([cx + rx * Math.cos(t) * c - ry * Math.sin(t) * s, cy + rx * Math.cos(t) * s + ry * Math.sin(t) * c]);
+  }
+}
+
+// Path data -> list of polylines {pts, closed}
+function pathToPolylines(d, tol) {
+  const T = tokenize(d); const subs = [];
+  let i = 0, cmd = null, x = 0, y = 0, sx = 0, sy = 0, lc = null, lq = null, cur = null;
+  const num = () => { const v = T[i++]; return typeof v === 'number' ? v : 0; };
+  const ensure = () => { if (!cur) { cur = { pts: [[x, y]], closed: false }; subs.push(cur); } };
+  while (i < T.length) {
+    if (typeof T[i] === 'string') cmd = T[i++];
+    else if (!cmd) { i++; continue; }
+    const rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase();
+    const ox = rel ? x : 0, oy = rel ? y : 0;
+    let nlc = null, nlq = null;
+    switch (C) {
+      case 'Z': if (cur) cur.closed = true; x = sx; y = sy; cur = null; cmd = null; break;
+      case 'M': x = num() + ox; y = num() + oy; sx = x; sy = y; cur = { pts: [[x, y]], closed: false }; subs.push(cur); cmd = rel ? 'l' : 'L'; break;
+      case 'L': ensure(); x = num() + ox; y = num() + oy; cur.pts.push([x, y]); break;
+      case 'H': ensure(); x = num() + ox; cur.pts.push([x, y]); break;
+      case 'V': ensure(); y = num() + oy; cur.pts.push([x, y]); break;
+      case 'C': { ensure(); const x1 = num() + ox, y1 = num() + oy, x2 = num() + ox, y2 = num() + oy, x3 = num() + ox, y3 = num() + oy;
+        cubicPts(cur.pts, x, y, x1, y1, x2, y2, x3, y3, tol); nlc = [x2, y2]; x = x3; y = y3; break; }
+      case 'S': { ensure(); const x1 = lc ? 2 * x - lc[0] : x, y1 = lc ? 2 * y - lc[1] : y;
+        const x2 = num() + ox, y2 = num() + oy, x3 = num() + ox, y3 = num() + oy;
+        cubicPts(cur.pts, x, y, x1, y1, x2, y2, x3, y3, tol); nlc = [x2, y2]; x = x3; y = y3; break; }
+      case 'Q': { ensure(); const x1 = num() + ox, y1 = num() + oy, x2 = num() + ox, y2 = num() + oy;
+        quadPts(cur.pts, x, y, x1, y1, x2, y2, tol); nlq = [x1, y1]; x = x2; y = y2; break; }
+      case 'T': { ensure(); const x1 = lq ? 2 * x - lq[0] : x, y1 = lq ? 2 * y - lq[1] : y; const x2 = num() + ox, y2 = num() + oy;
+        quadPts(cur.pts, x, y, x1, y1, x2, y2, tol); nlq = [x1, y1]; x = x2; y = y2; break; }
+      case 'A': { ensure(); const rx = num(), ry = num(), ph = num(), fa = num() ? 1 : 0, fs = num() ? 1 : 0, x2 = num() + ox, y2 = num() + oy;
+        arcPts(cur.pts, x, y, rx, ry, ph, fa, fs, x2, y2, tol); x = x2; y = y2; break; }
+      default: i++; cmd = null;
+    }
+    lc = nlc; lq = nlq;
+  }
+  return subs.filter(s => s.pts.length > 1);
+}
+
+function shapeToD(el) {
+  const g = a => parseFloat(el.getAttribute(a)) || 0;
+  switch (el.tagName.toLowerCase()) {
+    case 'path': return el.getAttribute('d') || '';
+    case 'line': return `M${g('x1')},${g('y1')}L${g('x2')},${g('y2')}`;
+    case 'polyline': case 'polygon': {
+      const n = (el.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number); let d = '';
+      for (let i = 0; i + 1 < n.length; i += 2) d += (i ? 'L' : 'M') + n[i] + ',' + n[i + 1];
+      return el.tagName.toLowerCase() === 'polygon' ? d + 'Z' : d;
+    }
+    case 'rect': {
+      const x = g('x'), y = g('y'), w = g('width'), h = g('height');
+      let rx = el.hasAttribute('rx') ? g('rx') : g('ry'), ry = el.hasAttribute('ry') ? g('ry') : rx;
+      rx = Math.min(rx, w / 2); ry = Math.min(ry, h / 2);
+      if (!rx || !ry) return `M${x},${y}h${w}v${h}h${-w}Z`;
+      return `M${x + rx},${y}h${w - 2 * rx}a${rx} ${ry} 0 0 1 ${rx} ${ry}v${h - 2 * ry}a${rx} ${ry} 0 0 1 ${-rx} ${ry}h${-(w - 2 * rx)}a${rx} ${ry} 0 0 1 ${-rx} ${-ry}v${-(h - 2 * ry)}a${rx} ${ry} 0 0 1 ${rx} ${-ry}Z`;
+    }
+    case 'circle': { const cx = g('cx'), cy = g('cy'), r = g('r'); return `M${cx - r},${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`; }
+    case 'ellipse': { const cx = g('cx'), cy = g('cy'), rx = g('rx'), ry = g('ry'); return `M${cx - rx},${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0Z`; }
+  }
+  return '';
+}
+
+function layerName(n) {
+  return [n.getAttribute('id'), n.getAttribute('data-name'), n.getAttribute('inkscape:label'),
+    n.getAttributeNS && n.getAttributeNS('http://www.inkscape.org/namespaces/inkscape', 'label')]
+    .filter(Boolean).join(' ').replace(/_x[0-9A-F]{2}_/gi, ' ');
+}
+// 0 cut, 1 fold, 2 emboss/deboss, 3 foil, 4 Spot UV, -1 anything else (artwork)
+function kindOfName(name) {
+  if (/emboss|deboss/i.test(name)) return 2;
+  if (/spot\s*uv|varnish/i.test(name)) return 4;
+  if (/foil/i.test(name)) return 3;
+  if (/crease|fold|score/i.test(name)) return 1;
+  if (/cut|die/i.test(name)) return 0;
+  return -1;
+}
+
+function readDieline(text) {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) throw new Error("This file isn't a readable SVG.");
+  let vb;
+  const vbA = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  if (vbA.length === 4 && vbA[2] > 0 && vbA[3] > 0) vb = { x: vbA[0], y: vbA[1], w: vbA[2], h: vbA[3] };
+  else {
+    const w = parseFloat(root.getAttribute('width')), h = parseFloat(root.getAttribute('height'));
+    if (!(w > 0 && h > 0)) throw new Error('The SVG has no viewBox or size, so its scale is unknown.');
+    vb = { x: 0, y: 0, w, h };
+  }
+  // Unit guess
+  let unitAuto = 25.4 / 72, unitNote = 'pt (assumed, Illustrator)';
+  const wm = /^\s*([\d.]+)\s*(mm|cm|in|pt|pc|px)?\s*$/.exec(root.getAttribute('width') || '');
+  if (wm) {
+    let u = wm[2] || 'px';
+    if (u === 'px' && /Illustrator/i.test(text.slice(0, 600))) u = 'pt';
+    unitAuto = MM[u] * parseFloat(wm[1]) / vb.w; unitNote = wm[2] ? `from width in ${wm[2]}` : 'px';
+  }
+
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none';
+  const live = document.importNode(root, true);
+  live.setAttribute('width', vb.w); live.setAttribute('height', vb.h); live.setAttribute('preserveAspectRatio', 'none');
+  host.appendChild(live); document.body.appendChild(host);
+  const cuts = [], creases = [];
+  let method = 'layers';
+  let hasArt = false;
+  try {
+    const shapes = [...live.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse')]
+      .filter(el => !el.closest('defs,clipPath,mask,symbol,pattern,marker'));
+    const kindOf = el => {
+      for (let n = el; n && n !== live; n = n.parentElement) { const k = kindOfName(layerName(n)); if (k >= 0) return k; }
+      return -1;
+    };
+    let kinds = shapes.map(kindOf);
+    if (!kinds.some(k => k === 0 || k === 1)) {
+      method = 'dashes';
+      kinds = shapes.map(el => { const cs = getComputedStyle(el); if (cs.stroke === 'none' || !cs.stroke) return -1; return cs.strokeDasharray && cs.strokeDasharray !== 'none' ? 1 : 0; });
+    }
+    const diag = Math.hypot(vb.w, vb.h), tol = diag * 0.0015;
+    shapes.forEach((el, idx) => {
+      const k = kinds[idx];
+      if (k < 0) { if (method === 'layers') hasArt = true; return; }
+      if (k > 1) return;
+      const m = el.getCTM() || { a: 1, b: 0, c: 0, d: 1, e: -vb.x, f: -vb.y };
+      for (const pl of pathToPolylines(shapeToD(el), tol)) {
+        pl.pts = pl.pts.map(([x, y]) => [m.a * x + m.c * y + m.e + vb.x, -(m.b * x + m.d * y + m.f + vb.y)]);
+        const a = pl.pts[0], b = pl.pts[pl.pts.length - 1];
+        if (!pl.closed && Math.hypot(a[0] - b[0], a[1] - b[1]) < diag * 1e-5) pl.closed = true;
+        (k === 1 ? creases : cuts).push(pl);
+      }
+    });
+    if (live.querySelector('image,text')) hasArt = true;
+  } finally { host.remove(); }
+
+  let artSVG = null;
+  if (hasArt && method === 'layers') {
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll('g').forEach(g => { if (kindOfName(layerName(g)) >= 0) g.remove(); });
+    clone.setAttribute('width', vb.w); clone.setAttribute('height', vb.h);
+    artSVG = new XMLSerializer().serializeToString(clone);
+  }
+  // Emboss, deboss and foil layers become finish masks, each drawn on its own
+  const finishes = [];
+  for (const g of root.querySelectorAll('g')) {
+    const name = layerName(g), k = kindOfName(name);
+    if (k < 2 || finishes.some(f => f.kind === k) || (g.parentElement && g.parentElement.closest('g') && kindOfName(layerName(g.parentElement.closest('g'))) === k)) continue;
+    const clone = root.cloneNode(true);
+    const target = [...clone.querySelectorAll('g')].find(x => x.getAttribute('id') === g.getAttribute('id') && layerName(x) === name);
+    if (!target) continue;
+    for (let n = target; n !== clone; n = n.parentElement)
+      for (const sib of [...n.parentElement.children]) if (sib !== n && !/^(defs|style)$/i.test(sib.localName)) sib.remove();
+    for (let n = target; n !== clone; n = n.parentElement) { n.removeAttribute('display'); n.style && n.style.removeProperty('display'); }
+    clone.setAttribute('width', vb.w); clone.setAttribute('height', vb.h); clone.setAttribute('preserveAspectRatio', 'none');
+    const colour = (/holo/i.test(name) && 'holo') || (/glitter/i.test(name) && 'glitter') || (/rose/i.test(name) && 'rose') || (/gold/i.test(name) && 'gold') || (/copper/i.test(name) && 'copper') || 'silver';
+    const label = (g.getAttribute('data-name') || g.getAttribute('inkscape:label') || g.getAttribute('id') || '')
+      .replace(/_x[0-9A-F]{2}_/gi, ' ').replace(/_\d+_$/, '').replace(/_/g, ' ').trim();
+    finishes.push({ kind: k, name: label, deboss: /deboss/i.test(name), colour, svg: new XMLSerializer().serializeToString(clone) });
+  }
+  return { vb, cuts, creases, method, unitAuto, unitNote, artSVG, finishes };
+}
+
+/* ---------------- Faces and hinges ---------------- */
+
+function pip(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function signedArea(p) { let a = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += (p[j][0] * p[i][1] - p[i][0] * p[j][1]); return a / 2; }
+function cleanLoop(p) {
+  let pts = p.slice(), changed = true;
+  while (changed && pts.length > 3) {
+    changed = false;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[(i - 1 + pts.length) % pts.length], b = pts[i], c = pts[(i + 1) % pts.length];
+      if (a === b || a === c) { pts.splice(i, 1); changed = true; break; }
+    }
+  }
+  return pts;
+}
+
+function buildModel(doc) {
+  const { vb, cuts, creases } = doc;
+  const diag = Math.hypot(vb.w, vb.h), eps = diag * 6e-4;
+  const segs = [];
+  const add = (polys, kind) => {
+    for (const pl of polys) {
+      const p = pl.pts.slice(); if (pl.closed && p.length > 2) p.push(p[0]);
+      for (let i = 0; i < p.length - 1; i++) {
+        const [ax, ay] = p[i], [bx, by] = p[i + 1], len = Math.hypot(bx - ax, by - ay);
+        if (len < eps * 0.05) continue;
+        segs.push({ ax, ay, bx, by, kind, len, t: [0, 1],
+          x0: Math.min(ax, bx) - eps, x1: Math.max(ax, bx) + eps, y0: Math.min(ay, by) - eps, y1: Math.max(ay, by) + eps });
+      }
+    }
+  };
+  add(cuts, 0); add(creases, 1);
+  if (!creases.length) throw new Error('No crease lines found. Put creases on a layer named Creases.');
+  if (!cuts.length) throw new Error('No cut lines found. Put cuts on a layer named Cuts.');
+
+  // Split segments where they touch or cross
+  const tryEnd = (S, px, py) => {
+    const dx = S.bx - S.ax, dy = S.by - S.ay, t = ((px - S.ax) * dx + (py - S.ay) * dy) / (S.len * S.len);
+    const tm = eps / S.len; if (t <= tm || t >= 1 - tm) return;
+    if (Math.hypot(S.ax + dx * t - px, S.ay + dy * t - py) < eps) S.t.push(t);
+  };
+  for (let i = 0; i < segs.length; i++) {
+    const A = segs[i];
+    for (let j = i + 1; j < segs.length; j++) {
+      const B = segs[j];
+      if (B.x0 > A.x1 || B.x1 < A.x0 || B.y0 > A.y1 || B.y1 < A.y0) continue;
+      tryEnd(A, B.ax, B.ay); tryEnd(A, B.bx, B.by); tryEnd(B, A.ax, A.ay); tryEnd(B, A.bx, A.by);
+      const rx = A.bx - A.ax, ry = A.by - A.ay, sx = B.bx - B.ax, sy = B.by - B.ay, den = rx * sy - ry * sx;
+      if (Math.abs(den) > 1e-12) {
+        const qx = B.ax - A.ax, qy = B.ay - A.ay, t = (qx * sy - qy * sx) / den, u = (qx * ry - qy * rx) / den;
+        const ta = eps / A.len, tb = eps / B.len;
+        if (t > ta && t < 1 - ta && u > tb && u < 1 - tb) { A.t.push(t); B.t.push(u); }
+      }
+    }
+  }
+
+  // Snap vertices
+  const verts = [], grid = new Map();
+  const vid = (x, y) => {
+    const gx = Math.floor(x / eps), gy = Math.floor(y / eps);
+    let best = -1, bd = eps * eps;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const l = grid.get((gx + a) + ',' + (gy + b)); if (!l) continue;
+      for (const id of l) { const d = (verts[id][0] - x) ** 2 + (verts[id][1] - y) ** 2; if (d < bd) { bd = d; best = id; } }
+    }
+    if (best >= 0) return best;
+    const id = verts.length; verts.push([x, y]);
+    const k = gx + ',' + gy; (grid.get(k) || grid.set(k, []).get(k)).push(id);
+    return id;
+  };
+  const E = [], emap = new Map();
+  for (const s of segs) {
+    s.t.sort((a, b) => a - b); let prev = -1;
+    for (const t of s.t) {
+      const id = vid(s.ax + (s.bx - s.ax) * t, s.ay + (s.by - s.ay) * t);
+      if (prev >= 0 && prev !== id) {
+        const key = prev < id ? prev + ',' + id : id + ',' + prev, ex = emap.get(key);
+        if (ex === undefined) { emap.set(key, E.length); E.push({ a: prev, b: id, kind: s.kind }); }
+        else if (s.kind === 0) E[ex].kind = 0;
+      }
+      prev = id;
+    }
+  }
+
+  // Half-edge face tracing
+  const nH = E.length * 2, from = new Int32Array(nH), to = new Int32Array(nH);
+  E.forEach((e, k) => { from[2 * k] = e.a; to[2 * k] = e.b; from[2 * k + 1] = e.b; to[2 * k + 1] = e.a; });
+  const out = verts.map(() => []);
+  for (let h = 0; h < nH; h++) out[from[h]].push(h);
+  const ang = new Float64Array(nH);
+  for (let h = 0; h < nH; h++) ang[h] = Math.atan2(verts[to[h]][1] - verts[from[h]][1], verts[to[h]][0] - verts[from[h]][0]);
+  const pos = new Int32Array(nH);
+  out.forEach(l => { l.sort((a, b) => ang[a] - ang[b]); l.forEach((h, i) => pos[h] = i); });
+  const next = h => { const l = out[to[h]]; return l[(pos[h ^ 1] - 1 + l.length) % l.length]; };
+  const faceOf = new Int32Array(nH).fill(-1), cycles = [];
+  for (let h0 = 0; h0 < nH; h0++) {
+    if (faceOf[h0] >= 0) continue;
+    const cyc = []; let h = h0, guard = 0;
+    do { faceOf[h] = cycles.length; cyc.push(h); h = next(h); } while (h !== h0 && ++guard <= nH);
+    cycles.push(cyc);
+  }
+  // Components
+  const par = verts.map((_, i) => i);
+  const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  E.forEach(e => { par[find(e.a)] = find(e.b); });
+
+  const minArea = (eps * 12) ** 2;
+  const info = cycles.map(cyc => {
+    const pts = cyc.map(h => verts[from[h]]);
+    return { pts, area: signedArea(pts), crease: cyc.some(h => E[h >> 1].kind === 1), comp: find(from[cyc[0]]) };
+  });
+  let mats = info.map((c, i) => i).filter(i => info[i].area > minArea && info[i].crease);
+  if (!mats.length) throw new Error("No panels found. Check that each crease runs all the way to a cut line or another crease.");
+
+  const faces = []; const cycFace = new Map();
+  for (const ci of mats) {
+    const id = faces.length; cycFace.set(ci, id);
+    faces.push({ id, contour: cleanLoop(info[ci].pts), holes: [], area: info[ci].area, comp: info[ci].comp });
+  }
+  // Holes: outer boundaries of other components that sit inside a panel
+  info.forEach(c => {
+    if (c.area > -minArea) return;
+    let best = null;
+    for (const f of faces) if (f.comp !== c.comp && pip(c.pts[0], f.contour) && (!best || f.area < best.area)) best = f;
+    if (best) { best.holes.push(cleanLoop(c.pts)); best.area += c.area; }
+  });
+
+  // Hinges
+  const hm = new Map();
+  E.forEach((e, k) => {
+    if (e.kind !== 1) return;
+    const fa = cycFace.get(faceOf[2 * k]), fb = cycFace.get(faceOf[2 * k + 1]);
+    if (fa === undefined || fb === undefined || fa === fb) return;
+    const key = Math.min(fa, fb) + '-' + Math.max(fa, fb);
+    let hg = hm.get(key); if (!hg) hm.set(key, hg = { key, a: Math.min(fa, fb), b: Math.max(fa, fb), pts: [] });
+    hg.pts.push(verts[e.a], verts[e.b]);
+  });
+  const hinges = [];
+  for (const hg of hm.values()) {
+    let p = hg.pts[0], q = hg.pts[1], best = -1;
+    for (let i = 0; i < hg.pts.length; i++) for (let j = i + 1; j < hg.pts.length; j++) {
+      const d = (hg.pts[i][0] - hg.pts[j][0]) ** 2 + (hg.pts[i][1] - hg.pts[j][1]) ** 2;
+      if (d > best) { best = d; p = hg.pts[i]; q = hg.pts[j]; }
+    }
+    if (Math.sqrt(best) > eps * 3) hinges.push({ id: hinges.length, key: hg.key, a: hg.a, b: hg.b, p, q, len: Math.sqrt(best) });
+  }
+
+  // Geometry
+  const maxArea = Math.max(...faces.map(f => f.area));
+  for (const f of faces) {
+    const c = f.contour.map(p => new THREE.Vector2(p[0], p[1]));
+    const hs = f.holes.map(h => h.map(p => new THREE.Vector2(p[0], p[1])));
+    if (THREE.ShapeUtils.isClockWise(c)) c.reverse();
+    hs.forEach(h => { if (!THREE.ShapeUtils.isClockWise(h)) h.reverse(); });
+    const all = c.concat(...hs);
+    const tris = THREE.ShapeUtils.triangulateShape(c.slice(), hs.map(h => h.slice()));
+    const posA = new Float32Array(all.length * 3), uv = new Float32Array(all.length * 2);
+    all.forEach((v, i) => {
+      posA[i * 3] = v.x; posA[i * 3 + 1] = v.y; posA[i * 3 + 2] = 0;
+      uv[i * 2] = (v.x - vb.x) / vb.w; uv[i * 2 + 1] = 1 - (-v.y - vb.y) / vb.h;
+    });
+    const idx = [], idxB = []; let bestA = -1, sample = [all[0].x, all[0].y];
+    for (const [a, b, d] of tris) {
+      const cr = (all[b].x - all[a].x) * (all[d].y - all[a].y) - (all[b].y - all[a].y) * (all[d].x - all[a].x);
+      if (cr >= 0) { idx.push(a, b, d); idxB.push(a, d, b); } else { idx.push(a, d, b); idxB.push(a, b, d); }
+      if (Math.abs(cr) > bestA) { bestA = Math.abs(cr); sample = [(all[a].x + all[b].x + all[d].x) / 3, (all[a].y + all[b].y + all[d].y) / 3]; }
+    }
+    const mk = (ix, nz) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(posA, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      const n = new Float32Array(all.length * 3); for (let i = 0; i < all.length; i++) n[i * 3 + 2] = nz;
+      g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+      g.setIndex(ix); return g;
+    };
+    f.geo = mk(idx, 1); f.geoBack = mk(idxB, -1);
+    f.sample = sample;
+    // Points spread over the panel, used to find flaps that land on top of each other
+    f.probes = [];
+    const step = Math.max(1, Math.floor(tris.length / 60));
+    for (let k = 0; k < tris.length; k += step) {
+      const [a, b, d] = tris[k], cx = (all[a].x + all[b].x + all[d].x) / 3, cy = (all[a].y + all[b].y + all[d].y) / 3;
+      f.probes.push([cx, cy]);
+      for (const v of [a, b, d]) f.probes.push([all[v].x * 0.6 + cx * 0.4, all[v].y * 0.6 + cy * 0.4]);
+    }
+    f.level = 0;
+    const xs = f.contour.map(p => p[0]), ys = f.contour.map(p => p[1]);
+    f.bbox = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  }
+  [...faces].sort((a, b) => (b.sample[1] - a.sample[1]) || (a.sample[0] - b.sample[0])).forEach((f, i) => f.num = i + 1);
+  const holes = [];
+  for (const f of faces) f.holeIds = f.holes.map(h => {
+    const xs = h.map(p => p[0]), ys = h.map(p => p[1]);
+    holes.push({ id: holes.length, face: f.id, pts: h, w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+    return holes.length - 1;
+  });
+  return { faces, hinges, holes, eps };
+}
+
+/* ---------------- Fold tree ---------------- */
+
+function computeTree() {
+  const m = state.model, n = m.faces.length;
+  const adj = m.faces.map(() => []);
+  for (const h of m.hinges) { adj[h.a].push(h); adj[h.b].push(h); }
+  if (state.base < 0 || state.base >= n) state.base = m.faces.reduce((b, f) => f.area > m.faces[b].area ? f.id : b, 0);
+  m.parent = new Array(n).fill(null); m.order = []; m.roots = new Set();
+  const seen = new Array(n).fill(false);
+  const starts = [state.base, ...m.faces.map(f => f.id).sort((a, b) => m.faces[b].area - m.faces[a].area)];
+  for (const s of starts) {
+    if (seen[s]) continue;
+    seen[s] = true; m.roots.add(s); const q = [s];
+    while (q.length) {
+      const f = q.shift(); m.order.push(f);
+      for (const h of adj[f]) {
+        const o = h.a === f ? h.b : h.a; if (seen[o]) continue;
+        seen[o] = true;
+        const dx = h.q[0] - h.p[0], dy = h.q[1] - h.p[1], L = Math.hypot(dx, dy);
+        const c = m.faces[o].sample, cross = (dx * (c[1] - h.p[1]) - dy * (c[0] - h.p[0])) / L;
+        m.parent[o] = { hinge: h, from: f, sign: cross > 0 ? -1 : 1, axis: new THREE.Vector3(dx / L, dy / L, 0) };
+        q.push(o);
+      }
+    }
+  }
+  m.inTree = new Set(m.parent.filter(Boolean).map(p => p.hinge.id));
+}
+
+const inFace = (f, pt) => pip(pt, f.contour) && !f.holes.some(h => pip(pt, h));
+
+// Panels that end up lying on top of each other are stacked one board thickness apart,
+// larger panels outside, so they never share a plane.
+function computeLayers() {
+  const m = state.model; if (!m || !m.order) return;
+  for (const f of m.faces) f.level = 0;
+  applyFold(1);
+  const th = state.thick / state.unit, tol = th * 0.5 + m.eps * 2;
+  const inv = m.faces.map(f => f.M.clone().invert());
+  const world = m.faces.map(f => f.probes.map(p => new THREE.Vector3(p[0], p[1], 0).applyMatrix4(f.M)));
+  const v = new THREE.Vector3();
+  const coplanar = (a, b) => [0, world[b].length >> 1, world[b].length - 1].every(i => Math.abs(v.copy(world[b][i]).applyMatrix4(inv[a]).z) < tol);
+  const lands = (a, b) => world[b].some(w => { v.copy(w).applyMatrix4(inv[a]); return inFace(m.faces[a], [v.x, v.y]); });
+  const over = m.faces.map(() => []);
+  for (let a = 0; a < m.faces.length; a++) for (let b = a + 1; b < m.faces.length; b++) {
+    if (world[a].length && world[b].length && coplanar(a, b) && (lands(a, b) || lands(b, a))) { over[a].push(b); over[b].push(a); }
+  }
+  const order = m.faces.map(f => f.id).sort((x, y) => m.faces[y].area - m.faces[x].area);
+  const rank = new Map(order.map((id, i) => [id, i]));
+  for (const id of order) {
+    let lv = 0;
+    for (const o of over[id]) if (rank.get(o) < rank.get(id)) lv = Math.max(lv, m.faces[o].level + 1);
+    m.faces[id].level = lv;
+  }
+  applyFold(state.t);
+}
+
+const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _O = new THREE.Matrix4();
+function applyFold(t) {
+  const m = state.model; if (!m) return;
+  const th = state.thick / state.unit, gap = (state.thick + FLAP_GAP_MM) / state.unit;
+  for (const id of m.order) {
+    const f = m.faces[id], p = m.parent[id];
+    if (!p) f.M = new THREE.Matrix4();
+    else {
+      const h = p.hinge, deg = state.angles.get(h.id) ?? 90;
+      const M = m.faces[p.from].M.clone();
+      // Hinge on the outer face of the board: the print side for back folds, the inside for forward folds
+      const pz = deg >= 0 ? 0 : -th;
+      M.multiply(_T.makeTranslation(h.p[0], h.p[1], pz));
+      M.multiply(_R.makeRotationAxis(p.axis, p.sign * deg * t * Math.PI / 180));
+      M.multiply(_T.makeTranslation(-h.p[0], -h.p[1], -pz));
+      f.M = M;
+    }
+    if (f.grp) f.grp.matrix.copy(f.M).multiply(_O.makeTranslation(0, 0, -f.level * gap * t));
+  }
+}
+
+/* ---------------- Three.js scene ---------------- */
+
+const canvas = $('#gl'), stage = $('#stage'), pane3d = $('#pane3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x24493f);
+const camera = new THREE.PerspectiveCamera(32, 1, 1, 100000);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; controls.dampingFactor = 0.08;
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture;
+const hemi = new THREE.HemisphereLight(0xffffff, 0x7a948c, 0.9); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; scene.add(sun, sun.target);
+const fill = new THREE.DirectionalLight(0xffffff, 0.4); scene.add(fill);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x2c5a4d, roughness: 0.95 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+let grids = [];
+const modelRoot = new THREE.Group(); scene.add(modelRoot);
+let texture = null, texCanvas = document.createElement('canvas');
+let normalTex = null, mrTex = null, insideTex = null, iridTex = null;
+const insideCanvas = document.createElement('canvas');
+const pickables = [], holeMeshes = [];
+const backMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.9 });
+const edgeCanvas = document.createElement('canvas'); edgeCanvas.width = 128; edgeCanvas.height = 64;
+const edgeTex = new THREE.CanvasTexture(edgeCanvas);
+edgeTex.wrapS = THREE.RepeatWrapping; edgeTex.colorSpace = THREE.SRGBColorSpace;
+const edgeMat = new THREE.MeshStandardMaterial({ map: edgeTex, roughness: 0.95 });
+const filmMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, name: 'Window film' });
+
+new ResizeObserver(() => {
+  const w = pane3d.clientWidth, h = pane3d.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}).observe(pane3d);
+
+function disposeModel() {
+  const keep = new Set([backMat, edgeMat, filmMat]);
+  modelRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !keep.has(o.material)) o.material.dispose(); });
+  modelRoot.clear(); pickables.length = 0; holeMeshes.length = 0;
+}
+
+function drawTexture() {
+  const vb = state.doc.vb, m = state.model;
+  const maxS = Math.min(renderer.capabilities.maxTextureSize, innerWidth < 800 ? 2048 : 4096);
+  const s = maxS / Math.max(vb.w, vb.h);
+  const cw = Math.round(vb.w * s), ch = Math.round(vb.h * s);
+  if (texCanvas.width !== cw || texCanvas.height !== ch) { texCanvas.width = cw; texCanvas.height = ch; if (texture) { texture.dispose(); texture = null; } }
+  const ctx = texCanvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = BOARD_BLANK; ctx.fillRect(0, 0, cw, ch);
+  ctx.setTransform(s, 0, 0, s, -vb.x * s, -vb.y * s);
+  const loop = pts => { pts.forEach(([x, y], i) => i ? ctx.lineTo(x, -y) : ctx.moveTo(x, -y)); ctx.closePath(); };
+  if (state.art) ctx.drawImage(state.art, vb.x, vb.y, vb.w, vb.h);
+
+  if (state.foil && state.foil.colourCanvas) ctx.drawImage(state.foil.colourCanvas, vb.x, vb.y, vb.w, vb.h);
+  if (state.showCreases) {
+    const lw = Math.hypot(vb.w, vb.h) * 0.0011;
+    ctx.strokeStyle = 'rgba(0,132,194,.85)'; ctx.lineWidth = lw; ctx.setLineDash([lw * 5, lw * 3]);
+    for (const h of m.hinges) { ctx.beginPath(); ctx.moveTo(h.p[0], -h.p[1]); ctx.lineTo(h.q[0], -h.q[1]); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  if (!texture) {
+    texture = new THREE.CanvasTexture(texCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    for (const f of m.faces) if (f.realFront) { f.realFront.map = texture; f.realFront.needsUpdate = true; }
+  }
+  texture.needsUpdate = true;
+}
+
+function buildScene() {
+  disposeModel();
+  const m = state.model;
+  if (texture) { texture.dispose(); texture = null; }
+  drawTexture();
+  for (const f of m.faces) {
+    const grp = new THREE.Group(); grp.matrixAutoUpdate = false;
+    const front = new THREE.Mesh(f.geo, new THREE.MeshPhysicalMaterial({ map: texture, roughness: 0.72 }));
+    const back = new THREE.Mesh(f.geoBack, backMat);
+    const edge = new THREE.Mesh(new THREE.BufferGeometry(), edgeMat);
+    for (const ms of [front, back, edge]) { ms.castShadow = ms.receiveShadow = true; ms.userData.face = f.id; pickables.push(ms); grp.add(ms); }
+    f.films = f.holeIds.map(hid => {
+      const pts = m.holes[hid].pts.map(p => new THREE.Vector2(p[0], p[1]));
+      const g = new THREE.BufferGeometry().setFromPoints(pts.map(v => new THREE.Vector3(v.x, v.y, 0)));
+      g.setIndex(THREE.ShapeUtils.triangulateShape(pts.slice(), []).flat()); g.computeVertexNormals();
+      const film = new THREE.Mesh(g, filmMat); film.renderOrder = 2;
+      film.visible = state.films.has(hid); film.userData = { face: f.id, hole: hid };
+      grp.add(film); holeMeshes.push(film); return film;
+    });
+    f.grp = grp; f.front = front; f.back = back; f.edge = edge; f.realFront = front.material; f.toon = null; f.outline = null;
+    modelRoot.add(grp);
+  }
+  layoutThickness();
+  modelRoot.scale.setScalar(state.unit);
+  computeTree();
+  computeLayers();
+  frame(true);
+  applyLighting();
+}
+
+// Side walls of each panel, so the board has real thickness
+function edgeGeometry(f, th) {
+  const pos = [], nor = [], uv = [], idx = [];
+  const pitch = (SUBSTRATES[state.substrate].flute || 6) / state.unit;
+  // No wall along a fold: the board carries on round the corner there
+  const tolE = state.model.eps * 2, hs = state.model.hinges.filter(h => h.a === f.id || h.b === f.id);
+  const onFold = (a, b) => hs.some(h => {
+    const dx = h.q[0] - h.p[0], dy = h.q[1] - h.p[1], L = Math.hypot(dx, dy);
+    return [a, b].every(pt => {
+      const t = ((pt[0] - h.p[0]) * dx + (pt[1] - h.p[1]) * dy) / (L * L);
+      return t > -0.01 && t < 1.01 && Math.abs((pt[0] - h.p[0]) * dy - (pt[1] - h.p[1]) * dx) / L < tolE;
+    });
+  });
+  for (const loop of [f.contour, ...f.holes]) {
+    const flip = (signedArea(loop) > 0) === (loop !== f.contour);
+    let acc = 0;
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i], b = loop[(i + 1) % loop.length], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
+      if (L < 1e-9) continue;
+      if (onFold(a, b)) { acc += L; continue; }
+      let nx = dy / L, ny = -dx / L; if (flip) { nx = -nx; ny = -ny; }
+      const base = pos.length / 3;
+      pos.push(a[0], a[1], 0, b[0], b[1], 0, b[0], b[1], -th, a[0], a[1], -th);
+      for (let k = 0; k < 4; k++) nor.push(nx, ny, 0);
+      const u0 = acc / pitch, u1 = (acc + L) / pitch; acc += L;
+      uv.push(u0, 1, u1, 1, u1, 0, u0, 0);
+      if (nx * -dy + ny * dx > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); return g;
+}
+
+function drawEdge() {
+  const sub = SUBSTRATES[state.substrate], ctx = edgeCanvas.getContext('2d');
+  if (sub.flute) {
+    ctx.fillStyle = '#4a3520'; ctx.fillRect(0, 0, 128, 64);
+    ctx.fillStyle = '#b8905f'; ctx.fillRect(0, 0, 128, 9); ctx.fillRect(0, 55, 128, 9);
+    ctx.strokeStyle = '#c29a68'; ctx.lineWidth = 6; ctx.beginPath();
+    for (let x = 0; x <= 128; x += 2) { const y = 32 + 21 * Math.sin(x / 128 * Math.PI * 2); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  } else { ctx.fillStyle = sub.edge; ctx.fillRect(0, 0, 128, 64); }
+  edgeTex.needsUpdate = true;
+}
+
+// Inside print goes on the back of every panel; by default it's laid out mirrored, as seen from inside
+function drawInside() {
+  if (!state.insideArt || !state.doc) { backMat.map = null; backMat.color.set(state.board); backMat.needsUpdate = true; return; }
+  const vb = state.doc.vb, s = Math.min(renderer.capabilities.maxTextureSize, innerWidth < 800 ? 2048 : 4096) / Math.max(vb.w, vb.h);
+  const cw = Math.round(vb.w * s), ch = Math.round(vb.h * s);
+  if (insideCanvas.width !== cw || insideCanvas.height !== ch) { insideCanvas.width = cw; insideCanvas.height = ch; if (insideTex) { insideTex.dispose(); insideTex = null; } }
+  const ctx = insideCanvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = state.board; ctx.fillRect(0, 0, cw, ch);
+  if (state.insideMirror) ctx.setTransform(-1, 0, 0, 1, cw, 0);
+  ctx.drawImage(state.insideArt, 0, 0, cw, ch);
+  if (!insideTex) { insideTex = new THREE.CanvasTexture(insideCanvas); insideTex.colorSpace = THREE.SRGBColorSpace; insideTex.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
+  insideTex.needsUpdate = true;
+  backMat.map = insideTex; backMat.color.set(0xffffff); backMat.needsUpdate = true;
+}
+
+function layoutThickness() {
+  const m = state.model; if (!m) return;
+  const th = state.thick / state.unit;
+  drawEdge();
+  for (const f of m.faces) {
+    f.back.position.z = -th;
+    f.edge.geometry.dispose(); f.edge.geometry = edgeGeometry(f, th);
+    for (const film of f.films) film.position.z = -th - FLAP_GAP_MM / state.unit;
+  }
+}
+
+function measure(t) {
+  applyFold(t); modelRoot.updateMatrixWorld(true);
+  const b = new THREE.Box3(); for (const f of state.model.faces) b.expandByObject(f.front); return b;
+}
+function frame(resetCam) {
+  modelRoot.position.set(0, 0, 0); modelRoot.scale.setScalar(state.unit);
+  // With a bottom chosen, that panel lies flat with its printed side down
+  modelRoot.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), state.bottomSet ? Math.PI / 2 : 0);
+  $('#btnUpright').hidden = !state.bottomSet;
+  const bf = measure(1), b0 = measure(0); applyFold(state.t);
+  const c = bf.getCenter(new THREE.Vector3());
+  state.offset = new THREE.Vector3(-c.x, 0, -c.z);
+  state.folded = bf.getSize(new THREE.Vector3());
+  state.flat = b0.getSize(new THREE.Vector3());
+  const R = Math.max(state.folded.length(), state.flat.length()) * 0.6;
+  const S = Math.ceil(R * 6 / 50) * 50;
+  ground.position.y = 0; ground.scale.set(S, S, 1);
+  grids.forEach(g => { scene.remove(g); g.geometry.dispose(); g.material.dispose(); });
+  grids = [[10, 0.12], [50, 0.28]].map(([step, op]) => {
+    const g = new THREE.GridHelper(S, Math.min(600, Math.round(S / step)), 0xd8efe6, 0xd8efe6);
+    g.material.transparent = true; g.material.opacity = op; g.position.y = 0.05; scene.add(g); return g;
+  });
+  state.lightR = R; placeLights();
+  const sc = sun.shadow.camera; sc.left = sc.bottom = -R * 1.5; sc.right = sc.top = R * 1.5; sc.near = R * 0.1; sc.far = R * 8; sc.updateProjectionMatrix();
+  settle();
+  if (resetCam) fitView(false);
+  renderStats();
+}
+
+// Keep the model resting on the mat as it folds and unfolds
+function settle() {
+  if (!state.offset) return;
+  modelRoot.position.copy(state.offset); modelRoot.updateMatrixWorld(true);
+  const b = new THREE.Box3(); for (const f of state.model.faces) b.expandByObject(f.front);
+  modelRoot.position.y = -b.min.y + 0.2;
+  modelRoot.updateMatrixWorld(true);
+}
+
+// The space the pack takes up at every stage of folding, so a camera framed on it never needs to move
+function wholeFoldSphere() {
+  const box = new THREE.Box3();
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+    applyFold(t); settle();
+    for (const f of state.model.faces) box.expandByObject(f.front);
+  }
+  applyFold(state.t); settle();
+  return box.getBoundingSphere(new THREE.Sphere());
+}
+function fitDistance(radius, cam) {
+  const vf = cam.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * cam.aspect);
+  return radius / Math.sin(Math.min(vf, hf) / 2) * 1.06;
+}
+// Frames the flat sheet and the folded pack together; keeps the current viewing angle unless told otherwise
+function fitView(keepAngle) {
+  if (!state.model || !state.offset) return;
+  const sphere = wholeFoldSphere(), d = fitDistance(sphere.radius, camera);
+  const dir = keepAngle ? camera.position.clone().sub(controls.target).normalize() : new THREE.Vector3(0.62, 0.42, 1).normalize();
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center).addScaledVector(dir, d);
+  camera.near = d / 200; camera.far = d * 60; camera.updateProjectionMatrix();
+  controls.maxDistance = d * 4; controls.update();
+}
+
+/* ---------------- UI ---------------- */
+
+const fmt = v => (Math.round(v * 10) / 10).toFixed(1);
+// Short notes that fade; errors stay a little longer
+function setStatus(msg, err, sticky) {
+  if (!msg) return;
+  const box = $('#toasts'), t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
+  while (box.children.length > 2) box.firstChild.remove();
+  box.appendChild(t);
+  if (!sticky) setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, err ? 7000 : 4200);
+  return t;
+}
+function stageMsg(msg) { $('#stageMsg').hidden = !msg; $('#stageMsgText').textContent = msg || ''; }
+
+function renderStats() {
+  const m = state.model; if (!m) { $('#stats').innerHTML = ''; return; }
+  const vb = state.doc.vb, u = state.unit, F = state.folded;
+  $('#stats').textContent = `Folded ${fmt(F.x)} × ${fmt(F.z)} × ${fmt(F.y)} mm · flat ${fmt(vb.w * u)} × ${fmt(vb.h * u)} mm · ${m.faces.length} panels · ${state.thick} mm board`;
+}
+
+function hingeClass(h) { const a = state.angles.get(h.id) ?? 90; return a > 0.5 ? 'back' : a < -0.5 ? 'fwd' : 'flat'; }
+
+const fmtAng = a => (Number.isInteger(a) ? a : a.toFixed(1)) + '°';
+function childOf(h) { const m = state.model; return m.parent[h.a] && m.parent[h.a].hinge === h ? h.a : h.b; }
+
+function drawMap() {
+  const m = state.model, svg = $('#map'); if (!m) { svg.innerHTML = ''; return; }
+  const vb = state.doc.vb, diag = Math.hypot(vb.w, vb.h), pad = diag * 0.03;
+  svg.setAttribute('viewBox', `${vb.x - pad} ${vb.y - pad} ${vb.w + 2 * pad} ${vb.h + 2 * pad}`);
+  const d = pts => pts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(2) + ',' + (-y).toFixed(2)).join('') + 'Z';
+  const selHinge = state.sel >= 0 && m.parent[state.sel] ? m.parent[state.sel].hinge.id : -1;
+  const fs = diag * 0.016, bh = fs * 1.75;
+  let html = '';
+  for (const f of m.faces) {
+    const cls = ['face', f.id === state.base ? 'base' : '', f.id === state.sel ? 'sel' : ''].join(' ');
+    html += `<path class="${cls}" fill-rule="evenodd" data-f="${f.id}" d="${d(f.contour)}${f.holes.map(d).join('')}"/>`;
+  }
+  if (state.bottomSet && m.faces[state.base]) { const bf = m.faces[state.base]; html += `<text class="tag" x="${bf.sample[0]}" y="${-bf.sample[1]}" style="font-size:${fs * 1.3}px">Bottom</text>`; }
+  for (const h of m.holes) html += `<path class="hole ${state.films.has(h.id) ? 'filled' : ''}" data-hole="${h.id}" d="${d(h.pts)}"><title>Window</title></path>`;
+  const tree = m.hinges.filter(h => m.inTree.has(h.id));
+  for (const h of tree) {
+    const ln = `x1="${h.p[0]}" y1="${-h.p[1]}" x2="${h.q[0]}" y2="${-h.q[1]}"`;
+    html += `<line class="h ${hingeClass(h)} ${h.id === selHinge ? 'sel' : ''}" ${ln}/><line class="hit" data-h="${h.id}" ${ln}/>`;
+  }
+  for (const h of tree) {
+    const label = fmtAng(state.angles.get(h.id) ?? 90), bw = fs * (0.62 * label.length + 1.1);
+    const mx = (h.p[0] + h.q[0]) / 2, my = -(h.p[1] + h.q[1]) / 2;
+    html += `<g class="badge ${hingeClass(h)} ${h.id === selHinge ? 'sel' : ''}" data-h="${h.id}" tabindex="0" role="button" aria-label="Fold at ${label}. Press Enter to change.">` +
+      `<rect x="${mx - bw / 2}" y="${my - bh / 2}" width="${bw}" height="${bh}" rx="${bh * 0.22}"/><text x="${mx}" y="${my}" style="font-size:${fs}px">${label}</text></g>`;
+  }
+  svg.innerHTML = html;
+  svg.classList.toggle('bucket', state.tool === 'bucket');
+}
+
+// Inline angle editor over a fold's badge
+const angEdit = $('#angEdit'); let editing = null;
+function openEditor(hid) {
+  const g = document.querySelector(`#map .badge[data-h="${hid}"]`); if (!g) return;
+  const r = g.getBoundingClientRect(), pr = $('#pane2d').getBoundingClientRect();
+  editing = hid;
+  angEdit.style.left = (r.left - pr.left + r.width / 2 - 40) + 'px';
+  angEdit.style.top = (r.top - pr.top + r.height / 2 - 17) + 'px';
+  angEdit.style.width = '80px'; angEdit.style.height = '34px';
+  angEdit.value = state.angles.get(hid) ?? 90; angEdit.hidden = false; angEdit.focus(); angEdit.select();
+}
+function closeEditor(commit) {
+  if (editing === null) return;
+  const h = editing; editing = null; angEdit.hidden = true;
+  if (commit) setHingeAngle(h, angEdit.value);
+}
+angEdit.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); const h = editing; closeEditor(true); const g = document.querySelector(`#map .badge[data-h="${h}"]`); if (g) g.focus(); }
+  else if (e.key === 'Escape') closeEditor(false);
+});
+angEdit.addEventListener('blur', () => closeEditor(true));
+
+function selectFace(id) {
+  state.sel = id;
+  const m = state.model;
+  if (m) for (const f of m.faces) { f.front.material.emissive.setHex(f.id === id ? 0x0b5a80 : 0x000000); f.front.material.emissiveIntensity = 0.45; }
+  drawMap();
+}
+
+function renderWindows() {
+  const m = state.model, ul = $('#winList'); if (!m) { ul.innerHTML = ''; return; }
+  if (!m.holes.length) { ul.innerHTML = '<li class="hint">This dieline has no windows to fill.</li>'; return; }
+  ul.innerHTML = m.holes.map(h => `<li><label class="check"><input type="checkbox" data-hole="${h.id}" ${state.films.has(h.id) ? 'checked' : ''}> Window ${h.id + 1} <span class="mono">· ${fmt(h.w * state.unit)} × ${fmt(h.h * state.unit)} mm</span></label></li>`).join('');
+}
+
+function toggleFilm(id, on) {
+  on = on ?? !state.films.has(id);
+  if (on) state.films.add(id); else state.films.delete(id);
+  for (const film of holeMeshes) if (film.userData.hole === id) film.visible = on;
+  renderWindows(); drawMap();
+}
+
+function setHingeAngle(hid, v) {
+  v = Math.max(-180, Math.min(180, Math.round((+v || 0) * 10) / 10));
+  state.angles.set(hid, v); savedAngles = null; computeLayers(); settle(); drawMap(); syncAll90();
+}
+
+// "Set all folds to 90°": ticking remembers the current angles, unticking puts them back
+let savedAngles = null;
+function syncAll90() { const m = state.model; $('#all90').checked = !!m && m.hinges.every(h => (state.angles.get(h.id) ?? 90) === 90); }
+$('#all90').addEventListener('change', e => {
+  if (!state.model) return;
+  if (e.target.checked) { savedAngles = new Map(state.angles); state.angles = new Map(); }
+  else if (savedAngles) { state.angles = savedAngles; savedAngles = null; }
+  computeLayers(); settle(); drawMap(); syncAll90();
+});
+function setT(t) {
+  state.t = t; $('#fold').value = Math.round(t * 100); $('#foldOut').textContent = Math.round(t * 100) + '%';
+  $('#btnPlay').setAttribute('aria-label', t > 0.5 ? 'Unfold' : 'Fold up');
+  applyFold(t); settle();
+}
+
+async function loadDielineText(text, name, quiet) {
+  let doc, model;
+  try { doc = readDieline(text); model = buildModel(doc); }
+  catch (e) { setStatus(e.message, true); if (!state.model) stageMsg(e.message); return false; }
+  state.doc = doc; state.model = model; state.angles = new Map(); state.base = -1; state.sel = -1; state.bottomSet = false;
+  closePanel(); setTool(null); currentLook = 'real';
+  state.name = (name || 'model').replace(/\.[^.]+$/, '');
+  state.unit = unitFor(state.unitMode);
+  $('#fileName').textContent = name || 'Dieline';
+  state.art = null; state.films = new Set(); state.emboss = null; state.foil = null; state.uv = null;
+  if (doc.artSVG) { try { state.art = await svgToImage(doc.artSVG); } catch { state.art = null; } }
+  $('#btnClearArt').hidden = !state.art;
+  state.insideArt = null; $('#btnClearInside').hidden = true; $('#insideMirrorWrap').hidden = true;
+  savedAngles = null;
+  buildScene(); drawInside();
+  const found = [];
+  for (const fin of doc.finishes || []) {
+    try {
+      const mk = maskFromSource(await svgToImage(fin.svg));
+      if (fin.kind === 2) {
+        $('#embInv').checked = fin.deboss;
+        state.emboss = { ...mk, invert: fin.deboss, strength: +$('#embStr').value };
+      } else if (fin.kind === 4) {
+        state.uv = { ...mk, invert: false, shine: +$('#uvShine').value };
+      } else {
+        $('#foilCol').value = fin.colour;
+        state.foil = { ...mk, invert: false, colour: fin.colour, shine: +$('#foilShine').value };
+      }
+      found.push(fin.name);
+    } catch { /* a layer that won't draw is skipped */ }
+  }
+  rebuildEmboss(); rebuildFoil(); renderWindows(); syncAll90();
+  setT(1); selectFace(-1); stageMsg('');
+  const how = doc.method === 'layers' ? 'Read the cut and fold layers.' : 'No Cuts or Folds layers found, so dashed lines were treated as folds.';
+  if (!quiet) setStatus(`${how} Found ${model.faces.length} panels joined by ${model.hinges.length} folds${model.holes.length ? ` and ${model.holes.length} windows` : ''}.${state.art ? ' Used the artwork from the other layers in the file.' : ''}${found.length ? ` Applied the ${found.join(' and ')} layer${found.length > 1 ? 's' : ''} as finishes.` : ''}`);
+  return true;
+}
+
+function unitFor(mode) { return mode === 'auto' ? state.doc.unitAuto : MM[mode]; }
+
+function svgToImage(svgText) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
+    const img = new Image(); img.onload = () => { res(img); }; img.onerror = () => rej(new Error("That SVG couldn't be drawn as artwork."));
+    img.src = url;
+  });
+}
+function fileToImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error("That image couldn't be opened."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+let pdfjs = null;
+async function pdfToCanvas(file) {
+  if (!pdfjs) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = res; s.onerror = () => rej(new Error("The PDF reader didn't load. Export the artwork as PNG instead."));
+      document.head.appendChild(s);
+    });
+    pdfjs = window.pdfjsLib; pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const page = await pdf.getPage(1);
+  const v1 = page.getViewport({ scale: 1 }), scale = 4096 / Math.max(v1.width, v1.height);
+  const vp = page.getViewport({ scale }), c = document.createElement('canvas');
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  return c;
+}
+
+// Any image, SVG or PDF, sized to the dieline artboard. SVGs drop their own cut and fold layers.
+async function fileToSource(file, stripFinishes = true) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.pdf') || file.type === 'application/pdf') return await pdfToCanvas(file);
+  if (name.endsWith('.svg') || file.type === 'image/svg+xml') {
+    const doc = new DOMParser().parseFromString(await file.text(), 'image/svg+xml'), r = doc.documentElement;
+    r.querySelectorAll('g').forEach(g => { const k = kindOfName(layerName(g)); if (k === 0 || k === 1 || (stripFinishes && k > 1)) g.remove(); });
+    const vb = state.doc.vb; r.setAttribute('width', vb.w); r.setAttribute('height', vb.h); r.setAttribute('preserveAspectRatio', 'none');
+    return await svgToImage(new XMLSerializer().serializeToString(r));
+  }
+  return await fileToImage(file);
+}
+function ratioOff(src) {
+  const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height, vb = state.doc.vb;
+  return Math.abs(w / h - vb.w / vb.h) / (vb.w / vb.h);
+}
+
+async function loadArtwork(file) {
+  if (!state.model) { setStatus('Open a dieline first, then add its artwork.', true); return; }
+  try {
+    setStatus('Loading artwork…');
+    state.art = await fileToSource(file);
+    const off = ratioOff(state.art);
+    drawTexture(); $('#btnClearArt').hidden = false;
+    setStatus(off > 0.01
+      ? `Artwork placed, but its proportions differ from the dieline artboard by ${Math.round(off * 100)}%, so it's stretched to fit. Export it from the same artboard for an exact match.`
+      : 'Artwork placed. It fills the dieline artboard exactly.', off > 0.01);
+  } catch (e) { setStatus(e.message || "That artwork couldn't be opened.", true); }
+}
+
+/* ---------------- Emboss and foil ---------------- */
+
+// Reads a black-and-white map at 2048 px: 1 where the finish goes. Detects ready-made normal maps.
+async function loadMask(file) { return maskFromSource(await fileToSource(file, false)); }
+function maskFromSource(src) {
+  const vb = state.doc.vb;
+  const sc = 2048 / Math.max(vb.w, vb.h), w = Math.round(vb.w * sc), h = Math.round(vb.h * sc);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0, w, h);
+  const px = ctx.getImageData(0, 0, w, h).data, n = w * h, data = new Float32Array(n);
+  let transp = 0, sr = 0, sg = 0, sb = 0;
+  for (let i = 0, j = 0; i < n; i++, j += 4) { if (px[j + 3] < 128) transp++; sr += px[j]; sg += px[j + 1]; sb += px[j + 2]; }
+  const hasAlpha = transp > n * 0.01, mr = sr / n / 255, mg = sg / n / 255, mb = sb / n / 255;
+  const isNormal = !hasAlpha && mb > 0.7 && Math.abs(mr - 0.5) < 0.12 && Math.abs(mg - 0.5) < 0.12;
+  let mean = 0;
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const v = hasAlpha ? px[j + 3] / 255 : 1 - (0.2126 * px[j] + 0.7152 * px[j + 1] + 0.0722 * px[j + 2]) / 255;
+    data[i] = v; mean += v;
+  }
+  // White shapes on black: the smaller area is the finish
+  if (!hasAlpha && mean / n > 0.5) for (let i = 0; i < n; i++) data[i] = 1 - data[i];
+  return { w, h, data, isNormal, canvas: c, off: ratioOff(src) };
+}
+
+function boxBlur(a, w, h, r) {
+  const t = new Float32Array(a.length), n = 2 * r + 1, cl = (v, hi) => v < 0 ? 0 : v > hi ? hi : v;
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let s = 0;
+    for (let x = -r; x <= r; x++) s += a[row + cl(x, w - 1)];
+    for (let x = 0; x < w; x++) { t[row + x] = s / n; s += a[row + cl(x + r + 1, w - 1)] - a[row + cl(x - r, w - 1)]; }
+  }
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let y = -r; y <= r; y++) s += t[cl(y, h - 1) * w + x];
+    for (let y = 0; y < h; y++) { a[y * w + x] = s / n; s += t[cl(y + r + 1, h - 1) * w + x] - t[cl(y - r, h - 1) * w + x]; }
+  }
+}
+
+// Height map -> tangent-space normal map (OpenGL convention, as glTF expects)
+function heightToNormal(e) {
+  const { w, h } = e, H = Float32Array.from(e.data, v => e.invert ? 1 - v : v);
+  const r = Math.max(1, Math.round(w * 0.0015)); boxBlur(H, w, h, r); boxBlur(H, w, h, r);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(w, h), o = img.data, K = r * 1.6;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const xl = x ? x - 1 : x, xr = x < w - 1 ? x + 1 : x, yu = y ? y - 1 : y, yd = y < h - 1 ? y + 1 : y;
+    const nx = -(H[y * w + xr] - H[y * w + xl]) * K, ny = (H[yd * w + x] - H[yu * w + x]) * K, l = Math.hypot(nx, ny, 1), j = (y * w + x) * 4;
+    o[j] = (nx / l * 0.5 + 0.5) * 255; o[j + 1] = (ny / l * 0.5 + 0.5) * 255; o[j + 2] = (1 / l * 0.5 + 0.5) * 255; o[j + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0); return c;
+}
+
+function applyFinishes() {
+  const m = state.model; if (!m) return;
+  const e = state.emboss, s = e ? e.strength * (e.isNormal && e.invert ? -1 : 1) : 1;
+  for (const f of m.faces) {
+    const mt = f.realFront;
+    mt.normalMap = normalTex; mt.normalScale.set(s, s);
+    mt.metalnessMap = mt.roughnessMap = mrTex;
+    mt.metalness = mrTex ? 1 : 0; mt.roughness = mrTex ? 1 : 0.72;
+    setIridescence(mt);
+    mt.needsUpdate = true;
+  }
+}
+
+function rebuildEmboss() {
+  if (normalTex) { normalTex.dispose(); normalTex = null; }
+  const e = state.emboss;
+  if (e) normalTex = new THREE.CanvasTexture(e.isNormal ? e.canvas : heightToNormal(e));
+  $('#embossCtl').hidden = !e; $('#btnClearEmboss').hidden = !e;
+  applyFinishes();
+}
+
+// Holographic foil shifts colour with the viewing angle (glTF iridescence), only where the mask says
+function setIridescence(mt) {
+  mt.iridescence = iridTex ? 1 : 0; mt.iridescenceMap = iridTex;
+  mt.iridescenceIOR = 1.8; mt.iridescenceThicknessRange = [250, 900];
+}
+
+const hash = (a, b) => {
+  let n = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+};
+function hsl(hh, ss, ll) {
+  const k = n => (n + hh * 12) % 12, a = ss * Math.min(ll, 1 - ll);
+  return [0, 8, 4].map(n => Math.round((ll - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))) * 255));
+}
+// The uploaded pattern tiled over silver, at the chosen repeat size
+function patternPixels(w, h) {
+  const img = state.foilPattern, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = FOILS.silver; ctx.fillRect(0, 0, w, h);
+  const tw = Math.max(2, state.foilTile / state.unit * (w / state.doc.vb.w));
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const tile = document.createElement('canvas'); tile.width = Math.round(tw); tile.height = Math.max(1, Math.round(tw * ih / iw));
+  tile.getContext('2d').drawImage(img, 0, 0, tile.width, tile.height);
+  ctx.fillStyle = ctx.createPattern(tile, 'repeat'); ctx.fillRect(0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h).data;
+}
+
+// Builds the shine map for paper, Spot UV and foil together (foil wins where they overlap),
+// plus the foil's colour layer and, for holographic foil, its iridescence mask
+function rebuildFoil() {
+  if (mrTex) { mrTex.dispose(); mrTex = null; }
+  if (iridTex) { iridTex.dispose(); iridTex = null; }
+  const fo = state.foil, uv = state.uv, src = fo || uv;
+  if (fo) fo.colourCanvas = null;
+  if (src) {
+    const { w, h } = src, type = fo ? fo.colour : 'none', rough = fo ? 0.5 - 0.45 * fo.shine : 0.5;
+    const uvRough = uv ? 0.05 + 0.3 * (1 - uv.shine) : 0.72;
+    const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+    const mr = mk(), mi = mr.getContext('2d').createImageData(w, h);
+    // Artwork-tinted foil keeps the printed colours; only the shine changes
+    const col = !fo || type === 'art' ? null : mk(), ci = col && col.getContext('2d').createImageData(w, h);
+    const irid = type === 'holo' ? mk() : null, ii = irid && irid.getContext('2d').createImageData(w, h);
+    const pat = type === 'pattern' && state.foilPattern ? patternPixels(w, h) : null;
+    const hex = FOILS[type] || FOILS.silver, base = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    const cell = Math.max(2, Math.round(w * 0.0022)), period = w * 0.06;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x, j = i * 4;
+      const v = fo ? (fo.invert ? 1 - fo.data[i] : fo.data[i]) : 0;
+      const u = uv ? (uv.invert ? 1 - uv.data[i] : uv.data[i]) : 0;
+      let rgb = base, ro = rough;
+      if (type === 'holo') {
+        // Soft rainbow bands over silver; the iridescence adds the shift as the box turns
+        const hue = (((x * 0.8 + y * 0.45) / (period * 3) + 0.06 * Math.sin(y / period)) % 1 + 1) % 1;
+        const c = hsl(hue, 0.55, 0.72);
+        rgb = [0, 1, 2].map(k => Math.round(c[k] * 0.6 + base[k] * 0.4)); ro = rough * 0.5;
+      } else if (type === 'glitter') {
+        const cx = Math.floor(x / cell), cy = Math.floor(y / cell), br = 165 + hash(cx, cy) * 90;
+        rgb = [br, br, Math.min(255, br + 8)]; ro = 0.04 + hash(cx + 9137, cy - 4211) * 0.55;
+      } else if (pat) {
+        rgb = [pat[j], pat[j + 1], pat[j + 2]];
+        ro = rough + (1 - (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255) * 0.3;
+      }
+      ro = Math.max(0.04, Math.min(1, ro));
+      const paper = 0.72 + (uvRough - 0.72) * u;
+      mi.data[j] = 255; mi.data[j + 1] = (paper + (ro - paper) * v) * 255; mi.data[j + 2] = v * 255; mi.data[j + 3] = 255;
+      if (ci) { ci.data[j] = rgb[0]; ci.data[j + 1] = rgb[1]; ci.data[j + 2] = rgb[2]; ci.data[j + 3] = v * 255; }
+      if (ii) { ii.data[j] = ii.data[j + 1] = ii.data[j + 2] = v * 255; ii.data[j + 3] = 255; }
+    }
+    mr.getContext('2d').putImageData(mi, 0, 0);
+    if (ci) col.getContext('2d').putImageData(ci, 0, 0);
+    if (ii) { irid.getContext('2d').putImageData(ii, 0, 0); iridTex = new THREE.CanvasTexture(irid); }
+    if (fo) fo.colourCanvas = col;
+    mrTex = new THREE.CanvasTexture(mr);
+  }
+  $('#foilCtl').hidden = !fo; $('#btnClearFoil').hidden = !fo; $('#dotFoil').hidden = !fo;
+  $('#uvCtl').hidden = !uv; $('#btnClearUv').hidden = !uv; $('#dotUv').hidden = !uv;
+  $('#foilPatternRow').hidden = !fo || fo.colour !== 'pattern';
+  if (state.model) drawTexture();
+  applyFinishes();
+}
+
+async function loadFinish(kind, file) {
+  if (!file) return;
+  if (!state.model) { setStatus('Open a dieline first, then add its finishes.', true); return; }
+  try {
+    setStatus(`Reading the ${kind} map…`);
+    const mk = await loadMask(file);
+    const warn = mk.off > 0.01 ? ` Its proportions differ from the dieline artboard by ${Math.round(mk.off * 100)}%, so it's stretched to fit.` : '';
+    if (kind === 'emboss') {
+      state.emboss = { ...mk, invert: $('#embInv').checked, strength: +$('#embStr').value }; rebuildEmboss();
+      setStatus((mk.isNormal ? 'Used the image as a ready-made normal map.' : 'Emboss added from the black areas of the map.') + warn, !!warn);
+    } else if (kind === 'uv') {
+      state.uv = { ...mk, invert: $('#uvInv').checked, shine: +$('#uvShine').value }; rebuildFoil();
+      setStatus('Spot UV added to the black areas of the mask.' + warn, !!warn);
+    } else {
+      state.foil = { ...mk, invert: $('#foilInv').checked, colour: $('#foilCol').value, shine: +$('#foilShine').value }; rebuildFoil();
+      setStatus('Foil added to the black areas of the mask.' + warn, !!warn);
+    }
+  } catch (e) { setStatus(e.message || `That ${kind} map couldn't be opened.`, true); }
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.svg') || file.type === 'image/svg+xml') {
+    const text = await file.text();
+    const named = /<g[^>]+(id|data-name)="[^"]*(cut|crease|fold|score)/i.test(text);
+    if (named || !state.model) { await loadDielineText(text, file.name); return; }
+  }
+  await loadArtwork(file);
+}
+
+$('#inDieline').addEventListener('change', async e => { const f = e.target.files[0]; if (f) await loadDielineText(await f.text(), f.name); e.target.value = ''; });
+$('#inArt').addEventListener('change', async e => { await loadArtwork(e.target.files[0]); e.target.value = ''; });
+$('#btnClearArt').addEventListener('click', () => { state.art = null; drawTexture(); $('#btnClearArt').hidden = true; setStatus('Artwork removed.'); });
+$('#fold').addEventListener('input', e => { anim = null; setT(e.target.value / 100); });
+$('#winList').addEventListener('change', e => { if (e.target.dataset.hole !== undefined) toggleFilm(+e.target.dataset.hole, e.target.checked); });
+
+$('#substrate').addEventListener('change', e => {
+  state.substrate = e.target.value; const sub = SUBSTRATES[state.substrate];
+  if (sub.t) { state.thick = sub.t; $('#thick').value = sub.t; }
+  if (sub.inside) { state.board = sub.inside; drawInside(); document.querySelectorAll('#boards button').forEach(x => x.classList.toggle('on', x.dataset.c === sub.inside)); }
+  if (state.model) { layoutThickness(); computeLayers(); frame(false); }
+});
+$('#thick').addEventListener('change', e => {
+  const v = Math.max(0.05, Math.min(10, +e.target.value || 0.45)); e.target.value = v;
+  state.thick = v;
+  const match = Object.entries(SUBSTRATES).find(([, sb]) => sb.t === v && !sb.flute);
+  if (!SUBSTRATES[state.substrate].flute && state.substrate !== (match ? match[0] : 'custom')) { state.substrate = match ? match[0] : 'custom'; $('#substrate').value = state.substrate; }
+  if (state.model) { layoutThickness(); computeLayers(); frame(false); }
+});
+$('#inInside').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!state.model) { setStatus('Open a dieline first, then add its inside artwork.', true); return; }
+  try {
+    state.insideArt = await fileToSource(f); drawInside();
+    $('#btnClearInside').hidden = false; $('#insideMirrorWrap').hidden = false;
+    const off = ratioOff(state.insideArt);
+    setStatus(off > 0.01 ? `Inside artwork placed, but its proportions differ from the dieline artboard by ${Math.round(off * 100)}%, so it's stretched to fit.` : 'Inside artwork placed on the inside of every panel.', off > 0.01);
+  } catch (err) { setStatus(err.message || "That artwork couldn't be opened.", true); }
+});
+$('#btnClearInside').addEventListener('click', () => { state.insideArt = null; drawInside(); $('#btnClearInside').hidden = true; $('#insideMirrorWrap').hidden = true; setStatus('Inside artwork removed.'); });
+$('#insideMirror').addEventListener('change', e => { state.insideMirror = e.target.checked; drawInside(); });
+$('#inEmboss').addEventListener('change', async e => { await loadFinish('emboss', e.target.files[0]); e.target.value = ''; });
+$('#inFoil').addEventListener('change', async e => { await loadFinish('foil', e.target.files[0]); e.target.value = ''; });
+$('#btnClearEmboss').addEventListener('click', () => { state.emboss = null; rebuildEmboss(); setStatus('Emboss removed.'); });
+$('#btnClearFoil').addEventListener('click', () => { state.foil = null; rebuildFoil(); setStatus('Foil removed.'); });
+$('#inUv').addEventListener('change', async e => { await loadFinish('uv', e.target.files[0]); e.target.value = ''; });
+$('#btnClearUv').addEventListener('click', () => { state.uv = null; rebuildFoil(); setStatus('Spot UV removed.'); });
+$('#uvShine').addEventListener('change', e => { if (state.uv) { state.uv.shine = +e.target.value; rebuildFoil(); } });
+$('#uvInv').addEventListener('change', e => { if (state.uv) { state.uv.invert = e.target.checked; rebuildFoil(); } });
+$('#finTabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#finTabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+  $('#finFoil').hidden = b.dataset.t !== 'foil'; $('#finUv').hidden = b.dataset.t !== 'uv';
+});
+$('#embStr').addEventListener('input', e => { if (state.emboss) { state.emboss.strength = +e.target.value; applyFinishes(); } });
+$('#embInv').addEventListener('change', e => { if (state.emboss) { state.emboss.invert = e.target.checked; rebuildEmboss(); } });
+$('#foilCol').addEventListener('change', e => {
+  if (!state.foil) return;
+  state.foil.colour = e.target.value; rebuildFoil();
+  if (e.target.value === 'pattern' && !state.foilPattern) setStatus('Upload a pattern image, such as stars or sparkles, to tile across the foil.');
+});
+$('#inFoilPat').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { state.foilPattern = await fileToImage(f); $('#foilPatName').textContent = f.name; rebuildFoil(); setStatus('Foil pattern applied.'); }
+  catch (err) { setStatus(err.message || "That pattern couldn't be opened.", true); }
+});
+$('#foilTile').addEventListener('change', e => {
+  const v = Math.max(1, Math.min(500, +e.target.value || 25)); e.target.value = v;
+  state.foilTile = v; if (state.foil) rebuildFoil();
+});
+$('#foilShine').addEventListener('change', e => { if (state.foil) { state.foil.shine = +e.target.value; rebuildFoil(); } });
+$('#foilInv').addEventListener('change', e => { if (state.foil) { state.foil.invert = e.target.checked; rebuildFoil(); } });
+function setBottom(id) {
+  state.base = id; state.bottomSet = true;
+  if (state.tool === 'bottom') closePanel();
+  computeTree(); computeLayers(); frame(true); selectFace(-1);
+  setStatus('Bottom set. The pack sits on that panel and exports the same way up.');
+}
+$('#btnUpright').addEventListener('click', () => {
+  state.base = -1; state.bottomSet = false;
+  computeTree(); computeLayers(); frame(true); selectFace(-1);
+});
+$('#map').addEventListener('click', e => {
+  const m = state.model; if (!m) return;
+  const t = e.target.closest('[data-hole],[data-h],[data-f]');
+  if (!t) { selectFace(-1); return; }
+  if (t.dataset.hole !== undefined) { toggleFilm(+t.dataset.hole); return; }
+  if (state.tool === 'bottom' && t.dataset.f !== undefined) { setBottom(+t.dataset.f); return; }
+  if (t.dataset.h !== undefined) { const h = m.hinges[+t.dataset.h]; selectFace(childOf(h)); openEditor(h.id); return; }
+  selectFace(+t.dataset.f);
+});
+$('#map').addEventListener('keydown', e => {
+  const g = e.target.closest('.badge'); if (!g || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault(); const h = state.model.hinges[+g.dataset.h]; selectFace(childOf(h)); openEditor(h.id);
+});
+function setView(v) {
+  closeEditor(false);
+  stage.classList.remove('v-split', 'v-2d', 'v-3d'); stage.classList.add('v-' + v);
+  document.querySelectorAll('#views button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+  requestAnimationFrame(() => fitView(true));
+}
+$('#views').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); });
+if (innerWidth < 800) setView('3d');
+$('#boards').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#boards button').forEach(x => x.classList.toggle('on', x === b));
+  $('#boardCustom').classList.remove('on');
+  state.board = b.dataset.c; drawInside();
+});
+$('#boardCustom').addEventListener('input', e => {
+  document.querySelectorAll('#boards button').forEach(x => x.classList.remove('on'));
+  e.target.classList.add('on'); state.board = e.target.value; drawInside();
+});
+$('#showCreases').addEventListener('change', e => { state.showCreases = e.target.checked; if (state.model) drawTexture(); });
+$('#units').addEventListener('change', e => { state.unitMode = e.target.value; if (!state.doc) return; state.unit = unitFor(state.unitMode); layoutThickness(); computeLayers(); frame(true); renderWindows(); });
+
+// Fold animation
+let anim = null;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+$('#btnFit').addEventListener('click', () => fitView(true));
+$('#btnPlay').addEventListener('click', () => {
+  const target = state.t > 0.5 ? 0 : 1;
+  if (reduceMotion.matches) { setT(target); return; }
+  anim = { from: state.t, to: target, t0: performance.now(), dur: 400 + 1400 * Math.abs(target - state.t) };
+});
+
+// Picking
+let down = null;
+canvas.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!down || !state.model) return;
+  const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null;
+  if (moved > 5) return;
+  const r = canvas.getBoundingClientRect();
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hits = ray.intersectObjects([...pickables, ...holeMeshes], false);
+  if (state.tool === 'bucket') {
+    const first = hits.find(x => x.object.userData.hole !== undefined || x.object.visible);
+    if (first && first.object.userData.hole !== undefined) toggleFilm(first.object.userData.hole);
+    else setStatus('Click inside a window to fill it with clear film.');
+    return;
+  }
+  const hit = hits.find(x => x.object.userData.hole === undefined || x.object.visible);
+  if (state.tool === 'bottom') { if (hit) setBottom(hit.object.userData.face); return; }
+  selectFace(hit ? hit.object.userData.face : -1);
+  // Clicking a panel opens the angle of the fold that joins it, when the dieline is on screen
+  const p = hit && state.model.parent[hit.object.userData.face];
+  if (p && !stage.classList.contains('v-3d')) openEditor(p.hinge.id);
+});
+
+// Drag and drop
+let dragDepth = 0;
+stage.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('#drop').hidden = false; });
+stage.addEventListener('dragover', e => e.preventDefault());
+stage.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').hidden = true; } });
+stage.addEventListener('drop', async e => {
+  e.preventDefault(); dragDepth = 0; $('#drop').hidden = true;
+  const files = [...e.dataTransfer.files];
+  const svgs = files.filter(f => /\.svg$/i.test(f.name)), rest = files.filter(f => !/\.svg$/i.test(f.name));
+  for (const f of [...svgs, ...rest]) await handleFile(f);
+});
+
+/* ---------------- Export ---------------- */
+
+// One object per separate piece of the dieline, folded as shown: a single mesh with one
+// material slot per surface.
+function exportScene() {
+  applyFold(state.t); modelRoot.updateMatrixWorld(true);
+  const print = new THREE.MeshPhysicalMaterial({ map: texture, name: 'Print', normalMap: normalTex, metalnessMap: mrTex, roughnessMap: mrTex, metalness: mrTex ? 1 : 0, roughness: mrTex ? 1 : 0.72 });
+  if (normalTex) print.normalScale.copy(state.model.faces[0].realFront.normalScale);
+  setIridescence(print);
+  const mats = {
+    print,
+    inside: new THREE.MeshStandardMaterial({ color: backMat.color.clone(), map: backMat.map, roughness: 0.9, name: 'Board inside' }),
+    edge: new THREE.MeshStandardMaterial({ map: edgeTex, roughness: 0.95, name: 'Board edge' }),
+    film: filmMat.clone(),
+  };
+  const toM = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
+  const pieces = new Map(), all = [];
+  for (const f of state.model.faces) {
+    if (!pieces.has(f.comp)) pieces.set(f.comp, { print: [], inside: [], edge: [], film: [] });
+    const bk = pieces.get(f.comp);
+    const parts = [[f.front, 'print'], [f.back, 'inside'], [f.edge, 'edge'], ...f.films.filter(x => x.visible).map(x => [x, 'film'])];
+    for (const [src, key] of parts) {
+      const g = src.geometry.clone(); g.applyMatrix4(toM.clone().multiply(src.matrixWorld));
+      if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+      if (!g.index || !g.getAttribute('position').count) continue;
+      bk[key].push(g); all.push(g);
+    }
+  }
+  const b = new THREE.Box3(); all.forEach(g => { g.computeBoundingBox(); b.union(g.boundingBox); });
+  const c = b.getCenter(new THREE.Vector3());
+  all.forEach(g => g.translate(-c.x, -b.min.y, -c.z));
+  const sc = new THREE.Scene(); let n = 1;
+  for (const bk of pieces.values()) {
+    const name = pieces.size > 1 ? `${state.name} part ${n++}` : state.name;
+    const used = Object.keys(mats).filter(k => bk[k].length);
+    const merged = used.map(k => mergeGeometries(bk[k], false));
+    const mesh = new THREE.Mesh(mergeGeometries(merged, true), used.map(k => mats[k])); mesh.name = name; sc.add(mesh);
+  }
+  return sc;
+}
+
+async function offerFile(name, bytes) {
+  const dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
+  if (dl) {
+    const direct = /\.(png|zip)$/i.test(name);
+    const data = direct ? bytes : zipSync({ [name]: bytes }), filename = direct ? name : name.replace(/\.[^.]+$/, '') + '.zip';
+    try { await dl.save({ filename, data }); setStatus(direct ? `Saved ${name}.` : `Saved ${name} (zipped).`); }
+    catch (e) { setStatus(e && e.code === 'declined' ? 'Download cancelled.' : "The download couldn't start here. Open this page as a file in your browser to export.", e && e.code !== 'declined'); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(bytes instanceof Blob ? bytes : new Blob([bytes], { type: 'application/octet-stream' })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  setStatus(`Saved ${name}.`);
+}
+
+async function buildExport() {
+  return new Uint8Array(await new GLTFExporter().parseAsync(exportScene(), { binary: true }));
+}
+$('#btnGlb').addEventListener('click', async () => {
+  if (!state.model) return;
+  try { setStatus('Building the 3D model…'); await offerFile(`${state.name}.glb`, await buildExport()); }
+  catch (e) { setStatus('3D model export failed: ' + (e.message || e), true); }
+});
+
+/* ---------------- Lighting ---------------- */
+
+// Light levels for each preset. The environment is the soft room reflection; the sun casts the shadow.
+const LIGHTS = {
+  soft: { env: 0.38, hemi: 0.3, sun: 1.35, fill: 0.2, height: 2.4, shadow: 0.25 },
+  studio: { env: 0.46, hemi: 0.34, sun: 1.6, fill: 0.32, height: 2.8, shadow: 0.2 },
+  dramatic: { env: 0.16, hemi: 0.1, sun: 2.5, fill: 0.04, height: 1.2, shadow: 0.45 },
+  even: { env: 0.5, hemi: 0.4, sun: 0.3, fill: 0.32, height: 3.2, shadow: 0.1 },
+};
+function placeLights() {
+  const R = state.lightR || 200, L = LIGHTS[state.light.preset], a = state.light.angle * Math.PI / 180;
+  sun.position.set(Math.cos(a) * R * 1.7, R * L.height, Math.sin(a) * R * 1.7); sun.target.position.set(0, 0, 0);
+  fill.position.set(-Math.cos(a) * R * 1.5, R, -Math.sin(a) * R * 1.5);
+}
+function applyLighting() {
+  const L = LIGHTS[state.light.preset], k = state.light.bright;
+  hemi.intensity = L.hemi * k; sun.intensity = L.sun * k; fill.intensity = L.fill * k;
+  const env = L.env * k, mats = [backMat, edgeMat, filmMat, ground.material];
+  if (state.model) for (const f of state.model.faces) mats.push(f.realFront);
+  for (const mt of mats) if ('envMapIntensity' in mt) mt.envMapIntensity = env;
+  shadowMat.opacity = L.shadow;
+  placeLights();
+}
+$('#lightPreset').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#lightPreset button').forEach(x => x.classList.toggle('on', x === b));
+  state.light.preset = b.dataset.l; applyLighting();
+});
+$('#lightBright').addEventListener('input', e => { state.light.bright = +e.target.value; $('#lightBrightOut').textContent = Math.round(e.target.value * 100) + '%'; applyLighting(); });
+$('#lightAngle').addEventListener('input', e => { state.light.angle = +e.target.value; $('#lightAngleOut').textContent = e.target.value + '°'; placeLights(); });
+
+/* ---------------- Tools and panels ---------------- */
+
+// Cursors for the two click tools, drawn as small SVGs
+const cursorSVG = (body, x, y) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 256 256'>${body}</svg>`)}") ${x} ${y}`;
+document.documentElement.style.setProperty('--cur-bottom', cursorSVG(`<path fill='#fff' stroke='#111' stroke-width='14' stroke-linejoin='round' d='M24 64h208v32c0 56-36.8 96-82.4 96-10.4 0-17.6-4-21.6-11.2-4 7.2-11.2 11.2-21.6 11.2C60.8 192 24 152 24 96z'/><path stroke='#111' stroke-width='14' stroke-linecap='round' d='M128 112v52'/>`, 16, 16));
+document.documentElement.style.setProperty('--cur-bucket', cursorSVG(`<path fill='#fff' stroke='#111' stroke-width='14' stroke-linejoin='round' d='M256,208a24,24,0,0,1-48,0c0-17.91,15.57-41.77,17.34-44.44a8,8,0,0,1,13.32,0C240.43,166.23,256,190.09,256,208ZM234.53,139.07a8,8,0,0,0,3.13-13.24L122.17,10.34a8,8,0,0,0-11.31,0L15,106.17a24,24,0,0,0,0,33.94L99.89,225a24,24,0,0,0,33.94,0l78.49-78.49Z'/>`, 29, 27));
+
+const HUD = 'Drag to orbit · scroll to zoom · click a panel';
+const TOOL_HUD = { bottom: 'Click the panel that should be the bottom · Esc to finish', bucket: 'Click a window to fill it with clear film · Esc to finish' };
+function setTool(tool) {
+  state.tool = tool;
+  stage.classList.toggle('tool-bottom', tool === 'bottom');
+  stage.classList.toggle('tool-bucket', tool === 'bucket');
+  $('#toolBottom').setAttribute('aria-pressed', tool === 'bottom');
+  $('#btnBucket').setAttribute('aria-pressed', tool === 'bucket');
+  $('#hud').textContent = TOOL_HUD[tool] || HUD;
+  if (state.model && state.model.inTree) drawMap();
+}
+
+let openPanel = null;
+function closePanel() {
+  if (!openPanel) return;
+  const { panel, btn } = openPanel; openPanel = null;
+  panel.hidden = true; if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
+  if (btn.dataset.tool) setTool(null);
+  if (panel.id === 'pImage' || panel.id === 'pSeq') setLook('real');
+}
+function showPanel(btn) {
+  const panel = $('#' + btn.dataset.panel);
+  if (openPanel && openPanel.panel === panel) { closePanel(); return; }
+  closePanel();
+  openPanel = { panel, btn };
+  panel.hidden = false; if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'true');
+  if (btn.dataset.tool) setTool(btn.dataset.tool);
+  // Rail panels open beside their button; export panels open above theirs
+  const ar = $('#app').getBoundingClientRect(), br = btn.getBoundingClientRect();
+  if (panel.closest('.rail')) {
+    // Tool panels sit in the rail so the dieline stays clear to click
+  } else if (btn.closest('.rail')) {
+    panel.style.left = (br.right - ar.left + 10) + 'px';
+    panel.style.top = Math.max(8, Math.min(br.top - ar.top, ar.height - panel.offsetHeight - 8)) + 'px';
+    panel.style.bottom = '';
+  } else {
+    panel.style.left = Math.max(8, Math.min(br.right - ar.left - panel.offsetWidth, ar.width - panel.offsetWidth - 8)) + 'px';
+    panel.style.top = ''; panel.style.bottom = (ar.bottom - br.top + 10) + 'px';
+  }
+  if (panel.id === 'pImage') previewLook('img');
+  if (panel.id === 'pSeq') previewLook('seq');
+}
+document.querySelectorAll('[data-panel]').forEach(b => b.addEventListener('click', () => showPanel(b)));
+document.querySelectorAll('.panel .close').forEach(b => b.addEventListener('click', closePanel));
+addEventListener('keydown', e => { if (e.key === 'Escape' && openPanel && editing === null) closePanel(); });
+
+/* ---------------- Looks: realistic and cel shaded ---------------- */
+
+const gradMap = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
+gradMap.minFilter = gradMap.magFilter = THREE.NearestFilter; gradMap.needsUpdate = true;
+const outlineMat = new LineMaterial({ color: 0x111111, linewidth: 3 });
+let currentLook = 'real';
+
+function lookOpts(prefix) {
+  return {
+    style: document.querySelector(`#${prefix}Style .on`).dataset.s,
+    plain: $(`#${prefix}Plain`).checked, line: +$(`#${prefix}Line`).value,
+    clear: $(`#${prefix}BgMode`).value === 'clear', colour: $(`#${prefix}Bg`).value,
+    crop: $(`#${prefix}BgMode`).value === 'clear' && $(`#${prefix}Crop`).checked,
+  };
+}
+function previewLook(prefix) { const o = lookOpts(prefix); setLook(o.style, o); }
+
+// Cel shading: flat tones plus a black line round every panel edge and fold
+function setLook(style, o = {}) {
+  const m = state.model; if (!m) return;
+  currentLook = style;
+  const th = state.thick / state.unit;
+  for (const f of m.faces) {
+    if (style !== 'cel') {
+      f.front.material = f.realFront; f.back.material = backMat; f.edge.material = edgeMat;
+      if (f.outline) f.outline.visible = false;
+      continue;
+    }
+    if (!f.toon) f.toon = {
+      front: new THREE.MeshToonMaterial({ gradientMap: gradMap, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+      back: new THREE.MeshToonMaterial({ gradientMap: gradMap, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+      edge: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+    };
+    f.toon.front.map = o.plain ? null : texture; f.toon.front.color.set(o.plain ? BOARD_BLANK : 0xffffff); f.toon.front.needsUpdate = true;
+    f.toon.back.map = o.plain ? null : backMat.map;
+    f.toon.back.color.copy(o.plain ? new THREE.Color(BOARD_BLANK) : backMat.color); f.toon.back.needsUpdate = true;
+    f.toon.front.emissive.copy(f.realFront.emissive); f.toon.front.emissiveIntensity = f.realFront.emissiveIntensity;
+    f.front.material = f.toon.front; f.back.material = f.toon.back; f.edge.material = f.toon.edge;
+    if (f.outline) { f.grp.remove(f.outline); f.outline.geometry.dispose(); }
+    const pos = [];
+    for (const loop of [f.contour, ...f.holes]) for (const z of [0, -th]) for (let i = 0; i < loop.length; i++) {
+      const a = loop[i], b = loop[(i + 1) % loop.length]; pos.push(a[0], a[1], z, b[0], b[1], z);
+    }
+    f.outline = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), outlineMat);
+    f.grp.add(f.outline);
+  }
+  outlineMat.linewidth = o.line || 3;
+  outlineMat.resolution.set(renderer.domElement.width, renderer.domElement.height);
+}
+
+for (const prefix of ['img', 'seq']) {
+  $(`#${prefix}Style`).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll(`#${prefix}Style button`).forEach(x => x.classList.toggle('on', x === b));
+    $(`#${prefix}Cel`).hidden = b.dataset.s !== 'cel'; previewLook(prefix);
+  });
+  $(`#${prefix}BgMode`).addEventListener('change', e => {
+    $(`#${prefix}Bg`).hidden = e.target.value !== 'colour'; $(`#${prefix}CropWrap`).hidden = e.target.value === 'colour';
+  });
+  for (const id of ['Plain', 'Line']) $(`#${prefix}${id}`).addEventListener('input', () => previewLook(prefix));
+}
+
+/* ---------------- Image and sequence export ---------------- */
+
+const shadowMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+function sizeOf(v) {
+  if (v === 'view') { const w = pane3d.clientWidth || 1600, h = pane3d.clientHeight || 900, k = 2400 / Math.max(w, h); return [Math.round(w * k), Math.round(h * k)]; }
+  return v.split('x').map(Number);
+}
+
+// Renders the scene off screen at any size, with a transparent or plain background and only the shadow kept from the mat
+function renderPixels(cam, w, h, o, lineRef = h) {
+  const keepBg = scene.background, keepGround = ground.material;
+  scene.background = o.clear ? null : new THREE.Color(o.colour);
+  ground.material = shadowMat; grids.forEach(g => g.visible = false);
+  outlineMat.linewidth = (o.line || 3) * lineRef / 1080; outlineMat.resolution.set(w, h);
+  const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4, colorSpace: THREE.SRGBColorSpace });
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam);
+  const buf = new Uint8Array(w * h * 4); renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
+  renderer.setRenderTarget(null); rt.dispose();
+  scene.background = keepBg; ground.material = keepGround; grids.forEach(g => g.visible = true);
+  outlineMat.linewidth = o.line || 3; outlineMat.resolution.set(renderer.domElement.width, renderer.domElement.height);
+  const img = new ImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * w * 4, dst = y * w * 4;
+    for (let x = 0; x < w * 4; x += 4) {
+      const a = buf[src + x + 3];
+      // Blended pixels come out premultiplied; undo that so soft shadows and film keep their colour
+      const k = a && a < 255 ? 255 / a : 1;
+      img.data[dst + x] = Math.min(255, buf[src + x] * k); img.data[dst + x + 1] = Math.min(255, buf[src + x + 1] * k);
+      img.data[dst + x + 2] = Math.min(255, buf[src + x + 2] * k); img.data[dst + x + 3] = a;
+    }
+  }
+  return img;
+}
+// Smallest box holding every visible pixel (the pack and its shadow), or null if the frame is empty
+function alphaBox(img) {
+  const { width: w, height: h, data } = img; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (data[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+function padBox(b, pad, w, h) {
+  return { x0: Math.max(0, Math.floor(b.x0 - pad)), y0: Math.max(0, Math.floor(b.y0 - pad)), x1: Math.min(w - 1, Math.ceil(b.x1 + pad)), y1: Math.min(h - 1, Math.ceil(b.y1 + pad)) };
+}
+function encodePNG(img, box) {
+  const b = box || { x0: 0, y0: 0, x1: img.width - 1, y1: img.height - 1 };
+  const c = document.createElement('canvas'); c.width = b.x1 - b.x0 + 1; c.height = b.y1 - b.y0 + 1;
+  c.getContext('2d').putImageData(img, -b.x0, -b.y0);
+  return new Promise(res => c.toBlob(async blob => res(new Uint8Array(await blob.arrayBuffer())), 'image/png'));
+}
+const CROP_PAD = 15;
+
+// Cropping without losing detail: a quick low-resolution render finds where the pack sits, then only
+// that part of the frame is rendered, scaled so the pack's long edge matches the chosen size
+const LOW_W = 480;
+function lowResBox(cam, w, h, o) {
+  const lh = Math.round(LOW_W * h / w);
+  return { box: alphaBox(renderPixels(cam, LOW_W, lh, o)), lw: LOW_W, lh };
+}
+function croppedView(cam, low, longEdge, margin) {
+  const { box, lw, lh } = low, rw = box.x1 - box.x0 + 1, rh = box.y1 - box.y0 + 1;
+  const k = (longEdge - 2 * CROP_PAD) / Math.max(rw, rh);
+  const m = margin + k; // a low-resolution pixel of slack on every side
+  const ow = Math.round(rw * k + 2 * m), oh = Math.round(rh * k + 2 * m);
+  const c = cam.clone(); c.setViewOffset(lw * k, lh * k, box.x0 * k - m, box.y0 * k - m, ow, oh); c.updateProjectionMatrix();
+  return { cam: c, ow, oh, lineRef: lh * k };
+}
+
+$('#btnPng').addEventListener('click', async () => {
+  if (!state.model) return;
+  const o = lookOpts('img'), [w, h] = sizeOf($('#imgSize').value);
+  try {
+    setStatus('Rendering the image…');
+    const cam = camera.clone(); cam.aspect = w / h; cam.updateProjectionMatrix();
+    let img = null, box = null;
+    const low = o.crop && lowResBox(cam, w, h, o);
+    if (low && low.box) {
+      const v = croppedView(cam, low, Math.max(w, h), CROP_PAD * 2);
+      img = renderPixels(v.cam, v.ow, v.oh, o, v.lineRef);
+      const b = alphaBox(img); box = b && padBox(b, CROP_PAD, v.ow, v.oh);
+    } else img = renderPixels(cam, w, h, o);
+    await offerFile(`${state.name}${o.style === 'cel' ? '-cel' : ''}.png`, await encodePNG(img, box));
+  } catch (e) { setStatus('Image export failed: ' + (e.message || e), true); }
+});
+
+// A still camera that keeps the whole animation in frame, looking from the current direction
+function sequenceCamera(w, h) {
+  const sphere = wholeFoldSphere();
+  const cam = camera.clone(); cam.aspect = w / h; cam.updateProjectionMatrix();
+  const d = fitDistance(sphere.radius, cam) / 1.06 * 1.04;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  cam.position.copy(sphere.center).addScaledVector(dir, d); cam.lookAt(sphere.center);
+  cam.near = d / 100; cam.far = d * 10; cam.updateProjectionMatrix();
+  return cam;
+}
+
+let rendering = false;
+$('#btnSeq').addEventListener('click', async () => {
+  if (!state.model || rendering) return;
+  const o = lookOpts('seq'), [w, h] = sizeOf($('#seqSize').value);
+  const fps = +$('#seqFps').value, len = Math.max(1, Math.min(20, +$('#seqLen').value || 4)), motion = $('#seqMotion').value;
+  const n = Math.round(len * fps), ease = k => k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+  // Short holds at each end so the move reads clearly
+  const tAt = i => {
+    const k = n > 1 ? i / (n - 1) : 1, hold = 0.12;
+    if (motion === 'loop') { const q = k < 0.5 ? k * 2 : (1 - k) * 2; return ease(Math.min(1, Math.max(0, (q - hold) / (1 - 2 * hold)))); }
+    const e = ease(Math.min(1, Math.max(0, (k - hold) / (1 - 2 * hold))));
+    return motion === 'fold' ? e : 1 - e;
+  };
+  rendering = true; $('#btnSeq').disabled = true; $('#seqProg').hidden = false;
+  const bar = $('#seqProg i'), keepT = state.t, files = {};
+  const folder = `${state.name}-${motion}`;
+  try {
+    const cam = sequenceCamera(w, h);
+    // Cropping: one box that holds the pack in every frame, so all frames share the same size and position
+    let view = { cam, ow: w, oh: h, lineRef: h };
+    if (o.crop) {
+      let low = null;
+      for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 48))) {
+        applyFold(tAt(i)); settle();
+        const f = lowResBox(cam, w, h, o); if (!f.box) continue;
+        if (!low) low = f;
+        else { const a = low.box, b = f.box; low.box = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) }; }
+      }
+      if (low) view = croppedView(cam, low, Math.max(w, h), CROP_PAD);
+    }
+    for (let i = 0; i < n; i++) {
+      applyFold(tAt(i)); settle();
+      files[`${folder}/${folder}_${String(i + 1).padStart(4, '0')}.png`] = await encodePNG(renderPixels(view.cam, view.ow, view.oh, o, view.lineRef));
+      bar.style.width = ((i + 1) / n * 100) + '%';
+      await new Promise(r => setTimeout(r, 0));
+    }
+    await offerFile(`${folder}.zip`, zipSync(files, { level: 0 }));
+  } catch (e) { setStatus('Sequence export failed: ' + (e.message || e), true); }
+  finally {
+    applyFold(keepT); settle();
+    rendering = false; $('#btnSeq').disabled = false; $('#seqProg').hidden = true; bar.style.width = '0';
+  }
+});
+
+/* ---------------- Sample dieline ---------------- */
+
+function sampleSVG() {
+  const W = 60, D = 40, H = 110, T = 14, G = 14, DD = 24, m = 4;
+  const x0 = m + G, y0 = m + T + D, yb = y0 + H;
+  const xs = [x0, x0 + W, x0 + W + D, x0 + 2 * W + D, x0 + 2 * W + 2 * D];
+  const P = [];
+  P.push([[x0, y0], [x0, yb], [x0 - G, yb - 10], [x0 - G, y0 + 10]]);
+  for (let i = 0; i < 4; i++) P.push([[xs[i], y0], [xs[i + 1], y0], [xs[i + 1], yb], [xs[i], yb]]);
+  const lid = (xa, xb, y, dir) => {
+    const yy = y - dir * D;
+    P.push([[xa, y], [xb, y], [xb, yy], [xa, yy]]);
+    P.push([[xa, yy], [xb, yy], [xb - 5, yy - dir * T], [xa + 5, yy - dir * T]]);
+  };
+  lid(xs[2], xs[3], y0, 1); lid(xs[0], xs[1], yb, -1);
+  const dust = (xa, xb, y, dir) => P.push([[xa, y], [xb, y], [xb - 2, y - dir * DD * 0.45], [xb - 9, y - dir * DD], [xa + 3, y - dir * DD]]);
+  dust(xs[1], xs[2], y0, 1); dust(xs[3], xs[4], y0, 1); dust(xs[1], xs[2], yb, -1); dust(xs[3], xs[4], yb, -1);
+  const count = new Map();
+  const k = p => p[0].toFixed(3) + ',' + p[1].toFixed(3);
+  for (const poly of P) poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length], ka = k(a), kb = k(b), key = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+    const e = count.get(key) || { a, b, n: 0 }; e.n++; count.set(key, e);
+  });
+  const line = e => `<line x1="${e.a[0]}" y1="${e.a[1]}" x2="${e.b[0]}" y2="${e.b[1]}"/>`;
+  const all = [...count.values()];
+  const w = xs[4] + m, h = yb + D + T + m;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">` +
+    `<g id="Cuts" stroke="#c4007a" fill="none">${all.filter(e => e.n === 1).map(line).join('')}</g>` +
+    `<g id="Creases" stroke="#009de0" fill="none">${all.filter(e => e.n > 1).map(line).join('')}</g></svg>`;
+}
+
+/* ---------------- Loop ---------------- */
+
+function loop(now) {
+  if (anim) {
+    const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    setT(anim.from + (anim.to - anim.from) * e); if (k >= 1) anim = null;
+  }
+  controls.update(); renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+window.foldline = { loadDielineText, buildExport, loadFinish, toggleFilm, setHingeAngle, state };
+(async () => {
+  await loadDielineText(sampleSVG(), 'Sample tuck box', true);
+  $('#fileName').textContent = 'Sample tuck box · 60 × 40 × 110 mm';
+  setStatus('Showing a sample tuck-end box. Open your own dieline SVG to fold it.');
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
