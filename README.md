@@ -2,7 +2,7 @@
 
 Fold a packaging dieline into 3D in your browser. Add artwork, emboss, foil, Spot UV and plastic windows, then export a 3D model, still images or an animated sequence.
 
-**Status: alpha.** It works, but expect rough edges. Please report problems.
+**Status: alpha.** It works, but expect rough edges. Completely and embarrassingly vibecoded. Please report problems.
 
 Everything runs in your browser. Your files are never uploaded anywhere.
 
