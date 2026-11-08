@@ -95,6 +95,7 @@ svg.i { width: 22px; height: 22px; flex: none; fill: currentColor; }
   display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
 }
+.panel:focus { outline: none; }
 .panel > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel h2 { margin: 0; font-size: 15px; font-weight: 650; }
 .panel h3 { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
@@ -285,7 +286,7 @@ ul.wins .mono { color: var(--muted); }
   </footer>
 
   <!-- Panels -->
-  <section class="panel" id="pFile" hidden aria-label="File">
+  <section class="panel" tabindex="-1" id="pFile" hidden aria-label="File">
     <header><h2>File</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <label class="btn wide">Open dieline SVG<input type="file" id="inDieline" accept=".svg,image/svg+xml"></label>
     <p class="hint">Needs a layer named <b>Cuts</b> and one named <b>Folds</b> or <b>Creases</b>. Every other layer is used as artwork. Layers named <b>Emboss</b>, <b>Deboss</b>, <b>Foil</b> or <b>Spot UV</b> become finishes.</p>
@@ -314,7 +315,7 @@ ul.wins .mono { color: var(--muted); }
   </section>
 
 
-  <section class="panel" id="pLight" hidden aria-label="Lighting">
+  <section class="panel" tabindex="-1" id="pLight" hidden aria-label="Lighting">
     <header><h2>Lighting</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <div class="seg" id="lightPreset"><button data-l="soft" class="on">Soft</button><button data-l="studio">Studio</button><button data-l="dramatic">Dramatic</button><button data-l="even">Even</button></div>
     <div class="row"><label class="lbl" for="lightBright">Brightness</label><input type="range" id="lightBright" min="0.3" max="1.6" step="0.05" value="1"><output id="lightBrightOut" for="lightBright">100%</output></div>
@@ -322,7 +323,7 @@ ul.wins .mono { color: var(--muted); }
     <p class="hint">Lighting changes the 3D view, images and sequences. The 3D model download carries no lighting, because Stager and other 3D tools light the scene themselves. <b>Even</b> is the flattest light for checking artwork colours.</p>
   </section>
 
-  <section class="panel" id="pSubstrate" hidden aria-label="Substrate">
+  <section class="panel" tabindex="-1" id="pSubstrate" hidden aria-label="Substrate">
     <header><h2>Substrate</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <select id="substrate" aria-label="Substrate">
       <option value="paper">Paper, 120 gsm · 0.15 mm</option>
@@ -350,7 +351,7 @@ ul.wins .mono { color: var(--muted); }
     </div>
   </section>
 
-  <section class="panel" id="pEmboss" hidden aria-label="Emboss">
+  <section class="panel" tabindex="-1" id="pEmboss" hidden aria-label="Emboss">
     <header><h2>Emboss</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <div class="row">
       <label class="btn">Add emboss map<input type="file" id="inEmboss" accept=".png,.jpg,.jpeg,.webp,.svg,.pdf,image/*,application/pdf"></label>
@@ -363,7 +364,7 @@ ul.wins .mono { color: var(--muted); }
     <p class="hint">A black-and-white image from the same artboard: black is raised. A ready-made normal map also works. Layers named <b>Emboss</b> or <b>Deboss</b> in the dieline SVG are applied automatically.</p>
   </section>
 
-  <section class="panel" id="pFoil" hidden aria-label="Foil and Spot UV">
+  <section class="panel" tabindex="-1" id="pFoil" hidden aria-label="Foil and Spot UV">
     <header><h2>Foil / Spot UV</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <div class="seg" id="finTabs" role="tablist">
       <button data-t="foil" class="on" role="tab" aria-selected="true">Foil<span class="dot" id="dotFoil" hidden></span></button><button data-t="uv" role="tab" aria-selected="false">Spot UV<span class="dot" id="dotUv" hidden></span></button>
@@ -410,7 +411,7 @@ ul.wins .mono { color: var(--muted); }
   </section>
 
 
-  <section class="panel" id="pImage" hidden aria-label="Image export">
+  <section class="panel" tabindex="-1" id="pImage" hidden aria-label="Image export">
     <header><h2>Image (PNG)</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <p class="hint">Saves the 3D view as you see it now.</p>
     <div class="seg" id="imgStyle"><button data-s="real" class="on">Realistic</button><button data-s="cel">Cel shaded</button></div>
@@ -431,7 +432,7 @@ ul.wins .mono { color: var(--muted); }
     <button class="btn wide" id="btnPng">Download PNG</button>
   </section>
 
-  <section class="panel" id="pSeq" hidden aria-label="Animated sequence export">
+  <section class="panel" tabindex="-1" id="pSeq" hidden aria-label="Animated sequence export">
     <header><h2>Animated sequence</h2><button class="close" aria-label="Close"><svg class="i" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button></header>
     <p class="hint">A numbered PNG sequence in a zip, ready for After Effects, Premiere or Keynote. The camera stays still and frames the whole fold. To make a video on a Mac, unzip it, open <b>QuickTime Player</b>, choose <b>File › Open Image Sequence…</b>, pick the folder, then save the movie.</p>
     <div class="row">
@@ -841,13 +842,53 @@ function buildModel(doc) {
     const pts = cyc.map(h => verts[from[h]]);
     return { pts, area: signedArea(pts), crease: cyc.some(h => E[h >> 1].kind === 1), comp: find(from[cyc[0]]) };
   });
-  let mats = info.map((c, i) => i).filter(i => info[i].area > minArea && info[i].crease);
+  const candidates = info.map((c, i) => i).filter(i => info[i].area > minArea && info[i].crease);
+
+  // A region enclosed by an even number of cut outlines is an opening, even if a fold line runs through it.
+  // Cuts that dead-end (knife slits) don't enclose anything, so they're left out of the count.
+  const cutLinks = verts.map(() => 0), live = E.map(e => e.kind === 0);
+  E.forEach((e, k) => { if (live[k]) { cutLinks[e.a]++; cutLinks[e.b]++; } });
+  for (let again = true; again;) {
+    again = false;
+    E.forEach((e, k) => { if (live[k] && (cutLinks[e.a] < 2 || cutLinks[e.b] < 2)) { live[k] = false; cutLinks[e.a]--; cutLinks[e.b]--; again = true; } });
+  }
+  const isOpening = c => {
+    const v = cleanLoop(c.pts).map(p => new THREE.Vector2(p[0], p[1])); if (THREE.ShapeUtils.isClockWise(v)) v.reverse();
+    let best = -1, px = v[0].x, py = v[0].y;
+    for (const [a, b, d] of THREE.ShapeUtils.triangulateShape(v.slice(), [])) {
+      const area = Math.abs((v[b].x - v[a].x) * (v[d].y - v[a].y) - (v[b].y - v[a].y) * (v[d].x - v[a].x));
+      if (area > best) { best = area; px = (v[a].x + v[b].x + v[d].x) / 3; py = (v[a].y + v[b].y + v[d].y) / 3; }
+    }
+    let crossings = 0;
+    E.forEach((e, k) => {
+      if (!live[k] || find(e.a) !== c.comp) return;
+      const [ax, ay] = verts[e.a], [bx, by] = verts[e.b];
+      if ((ay > py) !== (by > py) && px < (bx - ax) * (py - ay) / (by - ay) + ax) crossings++;
+    });
+    return crossings > 0 && crossings % 2 === 0;
+  };
+  const openings = candidates.filter(i => isOpening(info[i]));
+  let mats = candidates.filter(i => !openings.includes(i));
+  // A separate outline with its own fold line, sitting inside a panel, is a cut-out too
+  const nested = new Set();
+  info.forEach(c => {
+    if (c.area <= -minArea && mats.some(i => info[i].comp !== c.comp && info[i].area > -c.area && pip(c.pts[0], info[i].pts))) nested.add(c.comp);
+  });
+  mats = mats.filter(i => !nested.has(info[i].comp));
+  if (!mats.length) mats = candidates;
   if (!mats.length) throw new Error("No panels found. Check that each crease runs all the way to a cut line or another crease.");
 
   const faces = []; const cycFace = new Map();
   for (const ci of mats) {
     const id = faces.length; cycFace.set(ci, id);
-    faces.push({ id, contour: cleanLoop(info[ci].pts), holes: [], area: info[ci].area, comp: info[ci].comp });
+    faces.push({ id, contour: cleanLoop(info[ci].pts), holes: [], openings: [], area: info[ci].area, comp: info[ci].comp });
+  }
+  // Openings split by a fold are already notches in the panels around them; each half still takes window film
+  for (const ci of openings) {
+    for (const h of cycles[ci]) {
+      const owner = E[h >> 1].kind === 0 ? cycFace.get(faceOf[h ^ 1]) : undefined;
+      if (owner !== undefined) { faces[owner].openings.push(cleanLoop(info[ci].pts)); break; }
+    }
   }
   // Holes: outer boundaries of other components that sit inside a panel
   info.forEach(c => {
@@ -921,7 +962,7 @@ function buildModel(doc) {
   }
   [...faces].sort((a, b) => (b.sample[1] - a.sample[1]) || (a.sample[0] - b.sample[0])).forEach((f, i) => f.num = i + 1);
   const holes = [];
-  for (const f of faces) f.holeIds = f.holes.map(h => {
+  for (const f of faces) f.holeIds = [...f.holes, ...f.openings].map(h => {
     const xs = h.map(p => p[0]), ys = h.map(p => p[1]);
     holes.push({ id: holes.length, face: f.id, pts: h, w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
     return holes.length - 1;
@@ -1918,7 +1959,8 @@ let openPanel = null;
 function closePanel() {
   if (!openPanel) return;
   const { panel, btn } = openPanel; openPanel = null;
-  panel.hidden = true; if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
+  const hadFocus = panel.contains(document.activeElement);
+  panel.hidden = true; if (hadFocus) btn.focus({ preventScroll: true }); if (btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
   if (btn.dataset.tool) setTool(null);
   if (panel.id === 'pImage' || panel.id === 'pSeq') setLook('real');
 }
@@ -1943,6 +1985,8 @@ function showPanel(btn) {
   }
   if (panel.id === 'pImage') previewLook('img');
   if (panel.id === 'pSeq') previewLook('seq');
+  // Settings panels take keyboard focus; click tools leave it on their button
+  if (!btn.dataset.tool) panel.focus({ preventScroll: true });
 }
 document.querySelectorAll('[data-panel]').forEach(b => b.addEventListener('click', () => showPanel(b)));
 document.querySelectorAll('.panel .close').forEach(b => b.addEventListener('click', closePanel));
